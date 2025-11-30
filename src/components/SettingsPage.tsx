@@ -26,7 +26,7 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     xaiApiKey: '',
     baseUrl: 'https://api.x.ai/v1',
-    model: 'grok-beta',
+    model: 'auto',
     theme: 'dark',
   });
 
@@ -147,10 +147,30 @@ export function SettingsPage() {
               onChange={(e) => setSettings({ ...settings, model: e.target.value })}
               className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 transition text-gray-100"
             >
-              <option value="grok-beta">Grok Beta (Latest)</option>
-              <option value="grok-2">Grok 2</option>
-              <option value="grok-1.5">Grok 1.5</option>
+              <option value="auto">Auto (Best Available)</option>
+              <optgroup label="Grok 4 (Latest Frontier)">
+                <option value="grok-4-1-fast-reasoning">Grok 4.1 Fast (Reasoning) - 2M Context</option>
+                <option value="grok-4-1-fast-non-reasoning">Grok 4.1 Fast (Non-Reasoning) - 2M Context</option>
+                <option value="grok-4-fast-reasoning">Grok 4 Fast (Reasoning) - 2M Context</option>
+                <option value="grok-4-fast-non-reasoning">Grok 4 Fast (Non-Reasoning) - 2M Context</option>
+                <option value="grok-4-0709">Grok 4 (July 2025 Release) - 256K Context</option>
+              </optgroup>
+              <optgroup label="Specialized Models">
+                <option value="grok-code-fast-1">Grok Code Fast 1 - Code-Focused (256K Context)</option>
+                <option value="grok-2-vision-1212">Grok 2 Vision (Dec 2024) - Image Processing (32K Context)</option>
+                <option value="grok-2-image-1212">Grok 2 Image (Dec 2024) - Image Generation</option>
+              </optgroup>
+              <optgroup label="Grok 3">
+                <option value="grok-3">Grok 3 (Latest) - 131K Context</option>
+                <option value="grok-3-mini">Grok 3 Mini - Efficient (131K Context)</option>
+              </optgroup>
+              <optgroup label="Legacy">
+                <option value="grok-beta">Grok Beta (Deprecated - Use Grok 4)</option>
+              </optgroup>
             </select>
+            <p className="text-xs text-gray-500 mt-1">
+              "Auto" selects the best available model. Knowledge cutoff: November 2024 for Grok 3/2. Use aliases like "grok-4-latest" for auto-updates.
+            </p>
           </div>
         </div>
       </div>
