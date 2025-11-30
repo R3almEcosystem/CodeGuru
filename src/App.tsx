@@ -1,4 +1,4 @@
-// src/App.tsx — FIXED: Code blocks now have scrollbars!
+// src/App.tsx — FIXED: Perfect scrollbars in chat + code blocks
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -392,7 +392,8 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                  {/* Chat Messages - PERFECT SCROLLBAR */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
@@ -423,7 +424,8 @@ export default function App() {
                                           {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
                                         </button>
                                       </div>
-                                      <div className="overflow-x-auto custom-scrollbar">
+                                      {/* Code block with perfect scrollbar */}
+                                      <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                                         <SyntaxHighlighter 
                                           style={vscDarkPlus} 
                                           language={match?.[1] || 'text'} 
@@ -497,7 +499,7 @@ export default function App() {
                       <Code2 size={20} className="text-indigo-400" />
                       <span className="font-medium">main.py</span>
                     </div>
-                    <pre className="p-6 text-sm overflow-auto h-full custom-scrollbar">
+                    <pre className="p-6 text-sm overflow-auto h-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                       <code className="text-gray-300">
 {`# This file is synced with your chat
 # Ask Grok to generate code → it appears here
@@ -522,29 +524,26 @@ print("Hello from xAI Coder!")
         </main>
       </div>
 
-      {/* Custom Scrollbar Styles */}
-      <style jsx>{`
-        .custom-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #4b5563 #1f2937;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
+      {/* Tailwind Scrollbar Plugin Styles */}
+      <style jsx global>{`
+        .scrollbar-thin::-webkit-scrollbar {
           width: 8px;
           height: 8px;
         }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #1f2937;
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: #111827;
           border-radius: 4px;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
+        .scrollbar-thin::-webkit-scrollbar-thumb {
           background: #4b5563;
           border-radius: 4px;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
           background: #6b7280;
         }
-        .custom-scrollbar::-webkit-scrollbar-corner {
-          background: transparent;
+        .scrollbar-thin {
+          scrollbar-width: thin;
+          scrollbar-color: #4b5563 #111827;
         }
       `}</style>
     </div>
