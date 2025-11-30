@@ -1,4 +1,4 @@
-// src/App.tsx — FIXED: Perfect scrollbars in chat + code blocks
+// src/App.tsx — FINAL: PERFECT SCROLLBARS IN CHAT + CODE BLOCKS
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -274,7 +274,7 @@ export default function App() {
               <Plus size={20} /> New Project
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
             {projects.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Folder className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -425,7 +425,7 @@ export default function App() {
                                         </button>
                                       </div>
                                       {/* Code block with perfect scrollbar */}
-                                      <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
+                                      <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900 max-h-96">
                                         <SyntaxHighlighter 
                                           style={vscDarkPlus} 
                                           language={match?.[1] || 'text'} 
