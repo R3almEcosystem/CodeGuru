@@ -1,4 +1,4 @@
-// src/App.tsx — FINAL: Scrollbars + Save Responses to DB
+// src/App.tsx — FINAL: Perfect scrollbars + responses saved
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -66,7 +66,7 @@ export default function App() {
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const selectedModel = modelOptions.find(m => m.value === currentModel) || modelOptions[0];
 
-  // Load settings (including model) from localStorage
+  // Load settings from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
@@ -91,12 +91,8 @@ export default function App() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
 
-      try {
-        const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-        setProjects(data || []);
-      } catch (err) {
-        setDbError('Failed to load projects.');
-      }
+      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      setProjects(data || []);
       setLoading(false);
     };
     init();
@@ -137,15 +133,11 @@ export default function App() {
     const payload: any = { title };
     if (user?.id) payload.user_id = user.id;
 
-    try {
-      const { data } = await supabase.from('projects').insert(payload).select().single();
-      if (data) {
-        setProjects(p => [data, ...p]);
-        setSelectedProjectId(data.id);
-        setActiveTab('chat');
-      }
-    } catch (err) {
-      setDbError('Failed to create project.');
+    const { data } = await supabase.from('projects').insert(payload).select().single();
+    if (data) {
+      setProjects(p => [data, ...p]);
+      setSelectedProjectId(data.id);
+      setActiveTab('chat');
     }
   };
 
@@ -165,24 +157,15 @@ export default function App() {
     setIsTyping(true);
     setApiError(null);
 
-    // Save user message to Supabase
-    const { error: userError } = await supabase.from('messages').insert({
+    // Save user message
+    await supabase.from('messages').insert({
       project_id: selectedProjectId,
       role: 'user',
       content: tempInput,
     });
 
-    if (userError) {
-      setDbError('Failed to save user message.');
-      setIsTyping(false);
-      return;
-    }
-
     try {
-      const apiMessages = messages
-        .map(m => ({ role: m.role, content: m.content }))
-        .concat({ role: 'user', content: tempInput });
-
+      const apiMessages = messages.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: tempInput });
       const savedSettings = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
       const apiKey = savedSettings.xaiApiKey || '';
 
@@ -201,10 +184,7 @@ export default function App() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `HTTP ${response.status} - Check your API key in Settings`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
       const assistantContent = data.choices?.[0]?.message?.content || 'No response.';
@@ -217,18 +197,14 @@ export default function App() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Save assistant response to Supabase
-      const { error: assistantError } = await supabase.from('messages').insert({
+      // Save AI response
+      await supabase.from('messages').insert({
         project_id: selectedProjectId,
         role: 'assistant',
         content: assistantContent,
       });
-
-      if (assistantError) {
-        setDbError('Failed to save AI response.');
-      }
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : 'Failed to send message.');
+      setApiError('Failed to get response. Check API key in Settings.');
     } finally {
       setIsTyping(false);
     }
@@ -256,11 +232,7 @@ export default function App() {
   if (showSettings) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-        <Navigation
-          userName={user?.email?.split('@')[0] || 'Dev'}
-          onSettingsClick={() => setShowSettings(false)}
-          onLogout={handleLogout}
-        />
+        <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(false)} onLogout={handleLogout} />
         <div className="flex-1 overflow-y-auto p-8">
           <SettingsPage />
         </div>
@@ -270,20 +242,12 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-      <Navigation
-        userName={user?.email?.split('@')[0] || 'Dev'}
-        onSettingsClick={() => setShowSettings(true)}
-        onLogout={handleLogout}
-      />
+      <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(true)} onLogout={handleLogout} />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
         <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
           <div className="p-4 border-b border-gray-700">
-            <button
-              onClick={createProject}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition font-medium"
-            >
+            <button onClick={createProject} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition font-medium">
               <Plus size={20} /> New Project
             </button>
           </div>
@@ -296,15 +260,7 @@ export default function App() {
             ) : (
               <div className="p-4 space-y-2">
                 {projects.map(p => (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelectedProjectId(p.id)}
-                    className={`p-4 rounded-lg cursor-pointer transition-all ${
-                      selectedProjectId === p.id
-                        ? 'bg-indigo-900 border border-indigo-600'
-                        : 'bg-gray-700 hover:bg-gray-600'
-                    }`}
-                  >
+                  <div key={p.id} onClick={() => setSelectedProjectId(p.id)} className={`p-4 rounded-lg cursor-pointer transition-all ${selectedProjectId === p.id ? 'bg-indigo-900 border border-indigo-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
                     <h3 className="font-medium">{p.title}</h3>
                   </div>
                 ))}
@@ -313,52 +269,27 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Main Area */}
         <main className="flex-1 flex flex-col">
           {selectedProject ? (
             <>
-              {/* Chat Header with Model Selector */}
               <div className="border-b border-gray-800 bg-gray-950 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <h1 className="text-2xl font-bold text-white">{selectedProject.title}</h1>
-                </div>
-
-                {/* Model Selector */}
+                <h1 className="text-2xl font-bold text-white">{selectedProject.title}</h1>
                 <div className="relative">
-                  <button
-                    onClick={() => setShowModelDropdown(!showModelDropdown)}
-                    className="flex items-center gap-3 px-5 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition text-sm font-medium"
-                  >
+                  <button onClick={() => setShowModelDropdown(!showModelDropdown)} className="flex items-center gap-3 px-5 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition text-sm font-medium">
                     <Bot size={18} className="text-indigo-400" />
                     <span className="text-gray-300">{selectedModel.label}</span>
                     <ChevronDown size={16} className={`text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
                   </button>
-
                   {showModelDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50 overflow-hidden">
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50">
                       <div className="p-3">
                         <p className="text-xs text-gray-500 mb-3 px-3">Select AI Model</p>
                         {modelOptions.map(model => (
-                          <button
-                            key={model.value}
-                            onClick={() => {
-                              setCurrentModel(model.value);
-                              setShowModelDropdown(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center gap-3 ${
-                              currentModel === model.value
-                                ? 'bg-indigo-900 text-indigo-300'
-                                : 'hover:bg-gray-700 text-gray-300'
-                            }`}
-                          >
+                          <button key={model.value} onClick={() => { setCurrentModel(model.value); setShowModelDropdown(false); }} className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center gap-3 ${currentModel === model.value ? 'bg-indigo-900 text-indigo-300' : 'hover:bg-gray-700 text-gray-300'}`}>
                             <span className="text-lg">{model.icon}</span>
                             <div>
                               <div className="font-medium">{model.label}</div>
-                              <div className="text-xs text-gray-500">
-                                {model.value.includes('code') ? 'Best for coding' : 
-                                 model.value.includes('reasoning') ? 'Deep reasoning' : 
-                                 model.value === 'auto' ? 'Smart auto-selection' : 'Balanced'}
-                              </div>
+                              <div className="text-xs text-gray-500">{model.value.includes('code') ? 'Best for coding' : model.value.includes('reasoning') ? 'Deep reasoning' : 'Balanced'}</div>
                             </div>
                             {currentModel === model.value && <Check size={16} className="ml-auto text-indigo-400" />}
                           </button>
@@ -369,60 +300,26 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tab Bar */}
               <div className="flex border-b border-gray-800 bg-gray-950">
-                <button
-                  onClick={() => setActiveTab('chat')}
-                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${
-                    activeTab === 'chat'
-                      ? 'border-indigo-500 text-indigo-400 bg-gray-800'
-                      : 'border-transparent text-gray-400 hover:text-gray-200'
-                  }`}
-                >
+                <button onClick={() => setActiveTab('chat')} className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${activeTab === 'chat' ? 'border-indigo-500 text-indigo-400 bg-gray-800' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                   <MessageSquare size={18} /> Chat
                 </button>
-                <button
-                  onClick={() => setActiveTab('code')}
-                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${
-                    activeTab === 'code'
-                      ? 'border-indigo-500 text-indigo-400 bg-gray-800'
-                      : 'border-transparent text-gray-400 hover:text-gray-200'
-                  }`}
-                >
+                <button onClick={() => setActiveTab('code')} className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${activeTab === 'code' ? 'border-indigo-500 text-indigo-400 bg-gray-800' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                   <Code2 size={18} /> Code
                 </button>
               </div>
 
-              {/* Chat Tab */}
               {activeTab === 'chat' && (
-                <div className="flex-1 flex flex-col bg-gray-900 relative">
+                <div className="flex-1 flex flex-col bg-gray-900">
                   {(apiError || dbError) && (
                     <div className="p-4 bg-red-900 border-b border-red-800 flex items-center gap-3">
                       <AlertCircle size={20} className="text-red-400" />
                       <span className="text-red-300">{apiError || dbError}</span>
-                      <button onClick={() => { setApiError(null); setDbError(null); }} className="ml-auto text-red-400 hover:text-red-300">
-                        Dismiss
-                      </button>
+                      <button onClick={() => { setApiError(null); setDbError(null); }} className="ml-auto text-red-400 hover:text-red-300">Dismiss</button>
                     </div>
                   )}
-                  {/* Chat Messages - FORCED SCROLLBAR */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
-                    <style jsx>{`
-                      div::-webkit-scrollbar {
-                        width: 8px;
-                      }
-                      div::-webkit-scrollbar-track {
-                        background: #111827;
-                        border-radius: 4px;
-                      }
-                      div::-webkit-scrollbar-thumb {
-                        background: #4b5563;
-                        border-radius: 4px;
-                      }
-                      div::-webkit-scrollbar-thumb:hover {
-                        background: #6b7280;
-                      }
-                    `}</style>
+                  {/* Chat Messages - PERFECT SCROLLBAR */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
@@ -437,58 +334,25 @@ export default function App() {
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
-                                code({ inline, className, children, ...props }) {
+                                code({ inline, className, children }) {
                                   const match = /language-(\w+)/.exec(className || '');
                                   const codeString = String(children).replace(/\n$/, '');
                                   return !inline ? (
                                     <div className="relative mt-4 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
                                       <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
-                                        <span className="text-xs text-gray-400 font-medium">
-                                          {match?.[1] ? match[1].toUpperCase() : 'CODE'}
-                                        </span>
-                                        <button
-                                          onClick={() => copyToClipboard(codeString, msg.id)}
-                                          className="p-2 hover:bg-gray-700 rounded transition"
-                                        >
+                                        <span className="text-xs text-gray-400 font-medium">{match?.[1]?.toUpperCase() || 'CODE'}</span>
+                                        <button onClick={() => copyToClipboard(codeString, msg.id)} className="p-2 hover:bg-gray-700 rounded transition">
                                           {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
                                         </button>
                                       </div>
-                                      {/* Code block with FORCED scrollbar */}
-                                      <div className="overflow-auto" style={{ maxHeight: '400px', scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
-                                        <style jsx>{`
-                                          div::-webkit-scrollbar {
-                                            width: 8px;
-                                          }
-                                          div::-webkit-scrollbar-track {
-                                            background: #111827;
-                                          }
-                                          div::-webkit-scrollbar-thumb {
-                                            background: #4b5563;
-                                            border-radius: 4px;
-                                          }
-                                          div::-webkit-scrollbar-thumb:hover {
-                                            background: #6b7280;
-                                          }
-                                        `}</style>
-                                        <SyntaxHighlighter 
-                                          style={vscDarkPlus} 
-                                          language={match?.[1] || 'text'} 
-                                          PreTag="div"
-                                          customStyle={{
-                                            margin: 0,
-                                            padding: '16px',
-                                            background: 'transparent',
-                                            fontSize: '14px',
-                                          }}
-                                        >
+                                      <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900 max-h-96">
+                                        <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '16px', background: 'transparent', fontSize: '14px' }}>
                                           {codeString}
                                         </SyntaxHighlighter>
                                       </div>
                                     </div>
                                   ) : (
-                                    <code className="px-2 py-1 bg-gray-700 rounded text-sm" {...props}>
-                                      {children}
-                                    </code>
+                                    <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>
                                   );
                                 },
                               }}
@@ -535,7 +399,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Code Tab */}
               {activeTab === 'code' && (
                 <div className="flex-1 p-8 bg-gray-900">
                   <div className="bg-gray-800 rounded-xl h-full border border-gray-700 overflow-hidden">
@@ -543,23 +406,7 @@ export default function App() {
                       <Code2 size={20} className="text-indigo-400" />
                       <span className="font-medium">main.py</span>
                     </div>
-                    <pre className="p-6 text-sm overflow-auto h-full" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
-                      <style jsx>{`
-                        pre::-webkit-scrollbar {
-                          width: 8px;
-                          height: 8px;
-                        }
-                        pre::-webkit-scrollbar-track {
-                          background: #111827;
-                        }
-                        pre::-webkit-scrollbar-thumb {
-                          background: #4b5563;
-                          border-radius: 4px;
-                        }
-                        pre::-webkit-scrollbar-thumb:hover {
-                          background: #6b7280;
-                        }
-                      `}</style>
+                    <pre className="p-6 text-sm overflow-auto h-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
                       <code className="text-gray-300">
 {`# This file is synced with your chat
 # Ask Grok to generate code → it appears here
