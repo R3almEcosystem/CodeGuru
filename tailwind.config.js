@@ -7,3 +7,9 @@ export default {
   plugins: [],
   darkMode: 'class', // Enable dark mode via class
 };
+module.exports = {
+  // ... your existing config
+  plugins: [
+    require('tailwind-scrollbar')({ nocompatible: true }),
+  ],
+}
