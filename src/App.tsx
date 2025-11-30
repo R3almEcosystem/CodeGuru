@@ -1,4 +1,4 @@
-// src/App.tsx — FINAL, CLEAN, WORKING VERSION (2025
+// src/App.tsx — RESTORED FINAL WORKING VERSION (November 30, 2025)
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Loader2,
@@ -47,25 +47,21 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [currentModel, setCurrentModel] = useState<string>('auto');
+  const [currentModel, setCurrentModel] = useState('auto');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
 
-  // Load model from settings
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.model) setCurrentModel(parsed.model);
-      } catch (e) {
-        console.warn('Failed to parse settings');
-      }
+      } catch {}
     }
   }, []);
 
-  // Auth + load projects
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -90,7 +86,6 @@ export default function App() {
     init();
   }, []);
 
-  // Load conversations
   useEffect(() => {
     if (!selectedProjectId) {
       setConversations([]);
@@ -105,13 +100,12 @@ export default function App() {
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setConversations(data || []);
-        if (data?.length > 0 && !selectedConversationId) {
+        if (data?.length && !selectedConversationId) {
           setSelectedConversationId(data[0].id);
         }
       });
   }, [selectedProjectId]);
 
-  // Load messages
   useEffect(() => {
     if (!selectedConversationId) {
       setMessages([]);
@@ -126,7 +120,6 @@ export default function App() {
       .then(({ data }) => setMessages(data || []));
   }, [selectedConversationId]);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -179,7 +172,6 @@ export default function App() {
     setInput('');
     setIsTyping(true);
 
-    // Save user message
     await supabase.from('messages').insert({
       conversation_id: selectedConversationId,
       role: 'user',
@@ -189,14 +181,13 @@ export default function App() {
     try {
       const settings = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
       const apiKey = settings.xaiApiKey;
+      if (!apiKey) throw new Error('No API key in Settings');
 
-      if (!apiKey) throw new Error('No API key found. Please go to Settings and add your xAI API key.');
-
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      const res = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
           model: currentModel === 'auto' ? 'grok-2-latest' : currentModel,
@@ -206,13 +197,10 @@ export default function App() {
         }),
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `API Error ${response.status}`);
-      }
+      if (!res.ok) throw new Error(`API error ${res.status}`);
 
-      const data = await response.json();
-      const assistantContent = data.choices?.[0]?.message?.content || 'No response from Grok.';
+      const json = await res.json();
+      const assistantContent = json.choices?.[0]?.message?.content || 'No response';
 
       const assistantMsg: Message = {
         id: crypto.randomUUID(),
@@ -230,16 +218,13 @@ export default function App() {
         content: assistantContent,
       });
     } catch (err: any) {
-      setMessages(m => [
-        ...m,
-        {
-          id: crypto.randomUUID(),
-          conversation_id: selectedConversationId!,
-          role: 'assistant',
-          content: `Error: ${err.message || 'Failed to connect'}`,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      setMessages(m => [...m, {
+        id: crypto.randomUUID(),
+        conversation_id: selectedConversationId!,
+        role: 'assistant',
+        content: `Error: ${err.message}`,
+        created_at: new Date().toISOString(),
+      }]);
     } finally {
       setIsTyping(false);
     }
@@ -253,7 +238,6 @@ export default function App() {
     );
   }
 
-  // Settings Page — with close button
   if (showSettings) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
@@ -269,7 +253,6 @@ export default function App() {
     );
   }
 
-  // Main App
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
       <Navigation
@@ -279,7 +262,6 @@ export default function App() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
         <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
           <div className="p-4 border-b border-gray-700">
             <button
@@ -336,7 +318,6 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Chat Area */}
         <main className="flex-1 flex flex-col">
           {selectedConversation ? (
             <>
@@ -354,10 +335,7 @@ export default function App() {
                     </div>
                   ) : (
                     messages.map(msg => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                      >
+                      <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div
                           className={`max-w-4xl rounded-2xl px-8 py-5 ${
                             msg.role === 'user'
@@ -375,7 +353,7 @@ export default function App() {
                                   return <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>;
                                 }
                                 return (
-                                  <div className="my-4 bg-gray-900 rounded-xl border border-gray-700 rounded-xl overflow-hidden">
+                                  <div className="my-4 bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
                                     <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
                                       <span className="text-xs text-gray-400">{match?.[1]?.toUpperCase() || 'CODE'}</span>
                                       <button
@@ -442,10 +420,12 @@ export default function App() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex-col items-center justify-center flex-1 text-center px-8">
-              <div className="bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl w-32 h-32 mb-8" />
-              <h1 className="text-5xl font-bold mb-4">xAI Coder</h1>
-              <p className="text-xl text-gray-400 mt-4">Create a project to start chatting with Grok</p>
+            <div className="flex-1 flex items-center justify-center text-center">
+              <div>
+                <div className="bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl w-32 h-32 mb-8" />
+                <h1 className="text-5xl font-bold mb-4">xAI Coder</h1>
+                <p className="text-xl text-gray-400">Create a project to start chatting with Grok</p>
+              </div>
             </div>
           )}
         </main>
