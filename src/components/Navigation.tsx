@@ -1,5 +1,5 @@
 // src/components/Navigation.tsx
-import { Menu, X, Settings, LogOut, User, User } from 'lucide-react';
+import { Menu, X, Settings, LogOut, User, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 interface NavigationProps {
@@ -13,7 +13,7 @@ export function Navigation({ userName, onSettingsClick, onLogout }: NavigationPr
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close user dropdown when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -49,7 +49,12 @@ export function Navigation({ userName, onSettingsClick, onLogout }: NavigationPr
             <a href="#" className="text-gray-300 hover:text-white transition font-medium">
               Docs
             </a>
-            <a href="https://x.ai/api" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-white transition font-medium">
+            <a
+              href="https://x.ai/api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-300 hover:text-white transition font-medium"
+            >
               API
             </a>
           </nav>
@@ -97,7 +102,7 @@ export function Navigation({ userName, onSettingsClick, onLogout }: NavigationPr
               )}
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Hamburger */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"
