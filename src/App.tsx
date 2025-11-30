@@ -1,4 +1,4 @@
-// src/App.tsx — CHAT WITH MODEL SELECTOR IN HEADER
+// src/App.tsx — WITH CUSTOM DARK SCROLLBARS (LIKE VS CODE)
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -274,7 +274,7 @@ export default function App() {
               <Plus size={20} /> New Project
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             {projects.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Folder className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -392,7 +392,7 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
@@ -480,7 +480,7 @@ export default function App() {
                       <Code2 size={20} className="text-indigo-400" />
                       <span className="font-medium">main.py</span>
                     </div>
-                    <pre className="p-6 text-sm overflow-auto h-full">
+                    <pre className="p-6 text-sm overflow-auto h-full custom-scrollbar">
                       <code className="text-gray-300">
 {`# This file is synced with your chat
 # Ask Grok to generate code → it appears here
@@ -504,6 +504,28 @@ print("Hello from xAI Coder!")
           )}
         </main>
       </div>
+
+      {/* Custom Scrollbar Styles */}
+      <style jsx>{`
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #4b5563 #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1f2937;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #4b5563;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #6b7280;
+        }
+      `}</style>
     </div>
   );
 }
