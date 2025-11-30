@@ -1,4 +1,4 @@
-// src/App.tsx — FINAL: No plugins, perfect scrollbars, everything works
+// src/App.tsx — FINAL: No plugins, perfect scrollbars, 100% working
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -250,19 +250,10 @@ export default function App() {
           </div>
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
             <style jsx>{`
-              div::-webkit-scrollbar {
-                width: 8px;
-              }
-              div::-webkit-scrollbar-track {
-                background: #111827;
-              }
-              div::-webkit-scrollbar-thumb {
-                background: #4b5563;
-                border-radius: 4px;
-              }
-              div::-webkit-scrollbar-thumb:hover {
-                background: #6b7280;
-              }
+              div::-webkit-scrollbar { width: 8px; }
+              div::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
+              div::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+              div::-webkit-scrollbar-thumb:hover { background: #6b7280; }
             `}</style>
             {projects.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
@@ -332,19 +323,10 @@ export default function App() {
                   )}
                   <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
                     <style jsx>{`
-                      div::-webkit-scrollbar {
-                        width: 8px;
-                      }
-                      div::-webkit-scrollbar-track {
-                        background: #111827;
-                      }
-                      div::-webkit-scrollbar-thumb {
-                        background: #4b5563;
-                        border-radius: 4px;
-                      }
-                      div::-webkit-scrollbar-thumb:hover {
-                        background: #6b7280;
-                      }
+                      div::-webkit-scrollbar { width: 8px; }
+                      div::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
+                      div::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+                      div::-webkit-scrollbar-thumb:hover { background: #6b7280; }
                     `}</style>
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
@@ -373,19 +355,10 @@ export default function App() {
                                       </div>
                                       <div className="overflow-auto" style={{ maxHeight: '400px', scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
                                         <style jsx>{`
-                                          div::-webkit-scrollbar {
-                                            width: 8px;
-                                          }
-                                          div::-webkit-scrollbar-track {
-                                            background: #111827;
-                                          }
-                                          div::-webkit-scrollbar-thumb {
-                                            background: #4b5563;
-                                            border-radius: 4px;
-                                          }
-                                          div::-webkit-scrollbar-thumb:hover {
-                                            background: #6b7280;
-                                          }
+                                          div::-webkit-scrollbar { width: 8px; }
+                                          div::-webkit-scrollbar-track { background: #111827; }
+                                          div::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+                                          div::-webkit-scrollbar-thumb:hover { background: #6b7280; }
                                         `}</style>
                                         <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '16px', background: 'transparent', fontSize: '14px' }}>
                                           {codeString}
@@ -449,20 +422,10 @@ export default function App() {
                     </div>
                     <pre className="p-6 text-sm overflow-auto h-full" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
                       <style jsx>{`
-                        pre::-webkit-scrollbar {
-                          width: 8px;
-                          height: 8px;
-                        }
-                        pre::-webkit-scrollbar-track {
-                          background: #111827;
-                        }
-                        pre::-webkit-scrollbar-thumb {
-                          background: #4b5563;
-                          border-radius: 4px;
-                        }
-                        pre::-webkit-scrollbar-thumb:hover {
-                          background: #6b7280;
-                        }
+                        pre::-webkit-scrollbar { width: 8px; height: 8px; }
+                        pre::-webkit-scrollbar-track { background: #111827; }
+                        pre::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+                        pre::-webkit-scrollbar-thumb:hover { background: #6b7280; }
                       `}</style>
                       <code className="text-gray-300">
 {`# This file is synced with your chat
