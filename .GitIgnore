@@ -95,6 +95,8 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Optional: ignore all .env files except example
+.env
+.env.local
 *.env.local
 *.env.*.local
 
