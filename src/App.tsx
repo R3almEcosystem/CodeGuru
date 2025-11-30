@@ -1,6 +1,18 @@
-// src/App.tsx — FIXED: Supabase project_id + xAI API Errors
+// src/App.tsx — CHAT WITH MODEL SELECTOR IN HEADER
 import React, { useEffect, useState, useRef } from 'react';
-import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Copy, Check, AlertCircle } from 'lucide-react';
+import { 
+  Loader2, 
+  Plus, 
+  Folder, 
+  MessageSquare, 
+  Code2, 
+  Send, 
+  Copy, 
+  Check, 
+  AlertCircle,
+  ChevronDown,
+  Bot
+} from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Navigation } from './components/Navigation';
 import { SettingsPage } from './components/SettingsPage';
@@ -25,6 +37,15 @@ interface Message {
 
 type ActiveTab = 'chat' | 'code';
 
+const modelOptions = [
+  { value: 'auto', label: 'Auto (Best)', icon: 'AI' },
+  { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast (Reasoning)', icon: 'Brain' },
+  { value: 'grok-4-fast-reasoning', label: 'Grok 4 Fast (Reasoning)', icon: 'Lightning' },
+  { value: 'grok-code-fast-1', label: 'Grok Code Fast', icon: 'Code' },
+  { value: 'grok-3', label: 'Grok 3', icon: 'Cube' },
+  { value: 'grok-beta', label: 'Grok Beta', icon: 'Beta' },
+];
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,23 +59,19 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<{ xaiApiKey: string; model: string }>({
-    xaiApiKey: '', // Will load from localStorage; update in Settings
-    model: 'grok-beta',
-  });
+  const [currentModel, setCurrentModel] = useState('auto');
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+  const selectedModel = modelOptions.find(m => m.value === currentModel) || modelOptions[0];
 
-  // Load settings from localStorage
+  // Load settings (including model) from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      setSettings({ 
-        xaiApiKey: parsed.xaiApiKey || '', 
-        model: parsed.model || 'grok-beta' 
-      });
+      if (parsed.model) setCurrentModel(parsed.model);
     }
   }, []);
 
@@ -78,8 +95,7 @@ export default function App() {
         const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
         setProjects(data || []);
       } catch (err) {
-        setDbError('Failed to load projects. Check Supabase connection.');
-        console.error('Projects load error:', err);
+        setDbError('Failed to load projects.');
       }
       setLoading(false);
     };
@@ -96,16 +112,11 @@ export default function App() {
         .order('created_at', { ascending: true })
         .then(({ data, error }) => {
           if (error) {
-            setDbError(`Failed to load messages: ${error.message}. Ensure 'project_id' column exists in 'messages' table.`);
-            console.error('Messages load error:', error);
+            setDbError(`Failed to load messages: ${error.message}`);
             setMessages([]);
           } else {
             setMessages(data || []);
           }
-        })
-        .catch(err => {
-          setDbError('Network error loading messages.');
-          console.error('Messages load error:', err);
         });
     } else {
       setMessages([]);
@@ -127,12 +138,7 @@ export default function App() {
     if (user?.id) payload.user_id = user.id;
 
     try {
-      const { data } = await supabase
-        .from('projects')
-        .insert(payload)
-        .select()
-        .single();
-
+      const { data } = await supabase.from('projects').insert(payload).select().single();
       if (data) {
         setProjects(p => [data, ...p]);
         setSelectedProjectId(data.id);
@@ -140,7 +146,6 @@ export default function App() {
       }
     } catch (err) {
       setDbError('Failed to create project.');
-      console.error('Project creation error:', err);
     }
   };
 
@@ -161,28 +166,27 @@ export default function App() {
     setApiError(null);
 
     try {
-      // Save user message to Supabase
       await supabase.from('messages').insert({
         project_id: selectedProjectId,
         role: 'user',
         content: tempInput,
       });
 
-      // Prepare full conversation history for API
       const apiMessages = messages
-        .filter(m => m.role !== 'assistant' || m.content !== 'No response') // Clean up placeholders
         .map(m => ({ role: m.role, content: m.content }))
         .concat({ role: 'user', content: tempInput });
 
-      // Call xAI API with settings
+      const savedSettings = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
+      const apiKey = savedSettings.xaiApiKey || '';
+
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.xaiApiKey || ''}`,
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: settings.model || 'grok-beta',
+          model: currentModel,
           messages: apiMessages,
           stream: false,
           temperature: 0.7,
@@ -192,12 +196,11 @@ export default function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error?.message || `HTTP ${response.status} - Check your API key in Settings.`;
-        throw new Error(errorMsg);
+        throw new Error(errorData.error?.message || `HTTP ${response.status} - Check your API key in Settings`);
       }
 
       const data = await response.json();
-      const assistantContent = data.choices?.[0]?.message?.content || 'No response received. Try a different model.';
+      const assistantContent = data.choices?.[0]?.message?.content || 'No response.';
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -206,16 +209,13 @@ export default function App() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-
-      // Save assistant message to Supabase
       await supabase.from('messages').insert({
         project_id: selectedProjectId,
         role: 'assistant',
         content: assistantContent,
       });
     } catch (error) {
-      console.error('API Error:', error);
-      setApiError(error instanceof Error ? error.message : 'Failed to send message. Check console.');
+      setApiError(error instanceof Error ? error.message : 'Failed to send message.');
     } finally {
       setIsTyping(false);
     }
@@ -240,7 +240,6 @@ export default function App() {
     );
   }
 
-  // Settings Overlay
   if (showSettings) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
@@ -305,6 +304,58 @@ export default function App() {
         <main className="flex-1 flex flex-col">
           {selectedProject ? (
             <>
+              {/* Chat Header with Model Selector */}
+              <div className="border-b border-gray-800 bg-gray-950 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <h1 className="text-2xl font-bold text-white">{selectedProject.title}</h1>
+                </div>
+
+                {/* Model Selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowModelDropdown(!showModelDropdown)}
+                    className="flex items-center gap-3 px-5 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition text-sm font-medium"
+                  >
+                    <Bot size={18} className="text-indigo-400" />
+                    <span className="text-gray-300">{selectedModel.label}</span>
+                    <ChevronDown size={16} className={`text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showModelDropdown && (
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50 overflow-hidden">
+                      <div className="p-3">
+                        <p className="text-xs text-gray-500 mb-3 px-3">Select AI Model</p>
+                        {modelOptions.map(model => (
+                          <button
+                            key={model.value}
+                            onClick={() => {
+                              setCurrentModel(model.value);
+                              setShowModelDropdown(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center gap-3 ${
+                              currentModel === model.value
+                                ? 'bg-indigo-900 text-indigo-300'
+                                : 'hover:bg-gray-700 text-gray-300'
+                            }`}
+                          >
+                            <span className="text-lg">{model.icon}</span>
+                            <div>
+                              <div className="font-medium">{model.label}</div>
+                              <div className="text-xs text-gray-500">
+                                {model.value.includes('code') ? 'Best for coding' : 
+                                 model.value.includes('reasoning') ? 'Deep reasoning' : 
+                                 model.value === 'auto' ? 'Smart auto-selection' : 'Balanced'}
+                              </div>
+                            </div>
+                            {currentModel === model.value && <Check size={16} className="ml-auto text-indigo-400" />}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Tab Bar */}
               <div className="flex border-b border-gray-800 bg-gray-950">
                 <button
@@ -336,10 +387,7 @@ export default function App() {
                     <div className="p-4 bg-red-900 border-b border-red-800 flex items-center gap-3">
                       <AlertCircle size={20} className="text-red-400" />
                       <span className="text-red-300">{apiError || dbError}</span>
-                      <button 
-                        onClick={() => { setApiError(null); setDbError(null); }} 
-                        className="ml-auto text-red-400 hover:text-red-300"
-                      >
+                      <button onClick={() => { setApiError(null); setDbError(null); }} className="ml-auto text-red-400 hover:text-red-300">
                         Dismiss
                       </button>
                     </div>
@@ -350,7 +398,7 @@ export default function App() {
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
                         <h2 className="text-2xl font-bold mb-2">Start coding with Grok</h2>
                         <p>Ask anything — write code, debug, explain concepts</p>
-                        {settings.xaiApiKey ? '' : <p className="text-sm mt-4 text-yellow-400">Tip: Set your xAI API key in Settings for real responses.</p>}
+                        <p className="text-sm mt-4">Using: <strong className="text-indigo-400">{selectedModel.label}</strong></p>
                       </div>
                     ) : (
                       messages.map(msg => (
@@ -409,7 +457,7 @@ export default function App() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                        placeholder="Ask Grok to write code, debug, explain..."
+                        placeholder={`Ask ${selectedModel.label}...`}
                         className="flex-1 px-6 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:border-indigo-500 transition text-white placeholder-gray-500"
                       />
                       <button
