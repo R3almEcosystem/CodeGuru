@@ -1,4 +1,4 @@
-// src/App.tsx — FINAL: Perfect scrollbars + responses saved
+// src/App.tsx — FINAL: No plugins, perfect scrollbars, everything works
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -66,7 +66,7 @@ export default function App() {
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const selectedModel = modelOptions.find(m => m.value === currentModel) || modelOptions[0];
 
-  // Load settings from localStorage
+  // Load settings
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
@@ -98,7 +98,7 @@ export default function App() {
     init();
   }, []);
 
-  // Load messages when project changes
+  // Load messages
   useEffect(() => {
     if (selectedProjectId) {
       supabase
@@ -108,7 +108,7 @@ export default function App() {
         .order('created_at', { ascending: true })
         .then(({ data, error }) => {
           if (error) {
-            setDbError(`Failed to load messages: ${error.message}`);
+            setDbError(`Messages error: ${error.message}`);
             setMessages([]);
           } else {
             setMessages(data || []);
@@ -157,7 +157,6 @@ export default function App() {
     setIsTyping(true);
     setApiError(null);
 
-    // Save user message
     await supabase.from('messages').insert({
       project_id: selectedProjectId,
       role: 'user',
@@ -196,8 +195,6 @@ export default function App() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-
-      // Save AI response
       await supabase.from('messages').insert({
         project_id: selectedProjectId,
         role: 'assistant',
@@ -251,7 +248,22 @@ export default function App() {
               <Plus size={20} /> New Project
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
+          <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
+            <style jsx>{`
+              div::-webkit-scrollbar {
+                width: 8px;
+              }
+              div::-webkit-scrollbar-track {
+                background: #111827;
+              }
+              div::-webkit-scrollbar-thumb {
+                background: #4b5563;
+                border-radius: 4px;
+              }
+              div::-webkit-scrollbar-thumb:hover {
+                background: #6b7280;
+              }
+            `}</style>
             {projects.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Folder className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -318,8 +330,22 @@ export default function App() {
                       <button onClick={() => { setApiError(null); setDbError(null); }} className="ml-auto text-red-400 hover:text-red-300">Dismiss</button>
                     </div>
                   )}
-                  {/* Chat Messages - PERFECT SCROLLBAR */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
+                    <style jsx>{`
+                      div::-webkit-scrollbar {
+                        width: 8px;
+                      }
+                      div::-webkit-scrollbar-track {
+                        background: #111827;
+                      }
+                      div::-webkit-scrollbar-thumb {
+                        background: #4b5563;
+                        border-radius: 4px;
+                      }
+                      div::-webkit-scrollbar-thumb:hover {
+                        background: #6b7280;
+                      }
+                    `}</style>
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
@@ -345,7 +371,22 @@ export default function App() {
                                           {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
                                         </button>
                                       </div>
-                                      <div className="overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900 max-h-96">
+                                      <div className="overflow-auto" style={{ maxHeight: '400px', scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
+                                        <style jsx>{`
+                                          div::-webkit-scrollbar {
+                                            width: 8px;
+                                          }
+                                          div::-webkit-scrollbar-track {
+                                            background: #111827;
+                                          }
+                                          div::-webkit-scrollbar-thumb {
+                                            background: #4b5563;
+                                            border-radius: 4px;
+                                          }
+                                          div::-webkit-scrollbar-thumb:hover {
+                                            background: #6b7280;
+                                          }
+                                        `}</style>
                                         <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '16px', background: 'transparent', fontSize: '14px' }}>
                                           {codeString}
                                         </SyntaxHighlighter>
@@ -406,7 +447,23 @@ export default function App() {
                       <Code2 size={20} className="text-indigo-400" />
                       <span className="font-medium">main.py</span>
                     </div>
-                    <pre className="p-6 text-sm overflow-auto h-full scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-900">
+                    <pre className="p-6 text-sm overflow-auto h-full" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 #111827' }}>
+                      <style jsx>{`
+                        pre::-webkit-scrollbar {
+                          width: 8px;
+                          height: 8px;
+                        }
+                        pre::-webkit-scrollbar-track {
+                          background: #111827;
+                        }
+                        pre::-webkit-scrollbar-thumb {
+                          background: #4b5563;
+                          border-radius: 4px;
+                        }
+                        pre::-webkit-scrollbar-thumb:hover {
+                          background: #6b7280;
+                        }
+                      `}</style>
                       <code className="text-gray-300">
 {`# This file is synced with your chat
 # Ask Grok to generate code → it appears here
