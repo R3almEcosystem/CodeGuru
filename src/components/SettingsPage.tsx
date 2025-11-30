@@ -1,131 +1,234 @@
 // src/components/SettingsPage.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Copy, Check, Loader2 } from 'lucide-react';
-import { useSettings } from '../hooks/useSettings';
+import { 
+  Save, 
+  Key, 
+  Globe, 
+  Palette, 
+  LogOut, 
+  User, 
+  Trash2, 
+  Check,
+  Copy,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-interface SettingsPageProps {
-  onClose: () => void;
+interface Settings {
+  xaiApiKey: string;
+  baseUrl: string;
+  model: string;
+  theme: 'dark' | 'light' | 'system';
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
-  const { settings, updateSettings } = useSettings();
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string>('');
-  const [apiKey, setApiKey] = useState('');
+export function SettingsPage() {
+  const [settings, setSettings] = useState<Settings>({
+    xaiApiKey: '',
+    baseUrl: 'https://api.x.ai/v1',
+    model: 'grok-beta',
+    theme: 'dark',
+  });
+
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
 
+  // Load settings from localStorage
   useEffect(() => {
-    if (settings?.logoUrl) setLogoPreview(settings.logoUrl);
-  }, [settings?.logoUrl]);
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
-      alert('Please select a valid image under 5MB');
-      return;
+    const saved = localStorage.getItem('xai-coder-settings');
+    if (saved) {
+      setSettings(JSON.parse(saved));
     }
-    setLogoFile(file);
-    setUploadSuccess(false);
-    const reader = new FileReader();
-    reader.onloadend = () => setLogoPreview(reader.result as string);
-    reader.readAsDataURL(file);
+  }, []);
+
+  const handleSave = () => {
+    localStorage.setItem('xai-coder-settings', JSON.stringify(settings));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
-  const uploadLogo = async () => {
-    if (!logoFile) return;
-    setIsUploading(true);
-
-    const formData = new FormData();
-    formData.append('file', logoFile);
-
-    try {
-      const res = await fetch(
-        'https://vrcxtkstyeutxwhllnws.supabase.co/functions/v1/upload-logo',
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Upload failed');
-
-      await updateSettings({ logoUrl: json.publicUrl });
-      setLogoPreview(json.publicUrl);
-      setUploadSuccess(true);
-      alert('Logo uploaded successfully!');
-    } catch (err: any) {
-      alert(`Upload failed: ${err.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const saveApiKey = async () => {
-    if (apiKey.trim()) {
-      await updateSettings({ apiKey: apiKey.trim() });
-      setApiKey('');
-      alert('API key saved');
-    }
-  };
-
-  const copyKey = () => {
-    navigator.clipboard.writeText(settings?.apiKey || '');
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(settings.xaiApiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleClearData = () => {
+    if (confirm('Are you sure you want to clear all local data? This will remove all settings and cached projects.')) {
+      localStorage.clear();
+      alert('All data cleared! Refreshing...');
+      window.location.reload();
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm('Are you sure you want to log out?')) {
+      await supabase.auth.signOut();
+      window.location.reload();
+    }
+  };
+
   return (
-    <div className="relative h-full flex flex-col">
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg z-10">
-        <X size={24} />
-      </button>
+    <div className="max-w-4xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="border-b border-gray-700 pb-6">
+        <h1 className="text-3xl font-bold text-gray-100">Settings</h1>
+        <p className="text-gray-400 mt-2">Configure your xAI Coder experience</p>
+      </div>
 
-      <div className="max-w-4xl mx-auto p-8 flex-1 overflow-y-auto">
-        <h1 className="text-3xl font-bold mb-2">Settings</h1>
-        <p className="text-gray-600 mb-10">Manage your xAI Coder workspace</p>
+      {/* API Configuration */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <Key className="w-6 h-6 text-indigo-400" />
+          <h2 className="text-xl font-semibold text-gray-100">xAI API Configuration</h2>
+        </div>
 
-        <div className="space-y-8">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border p-6">
-            <h2 className="text-xl font-semibold mb-6">Branding</h2>
-            <div className="flex items-start gap-8">
-              <img src={logoPreview || '/vite.svg'} alt="Logo" className="w-32 h-32 rounded-xl object-contain border-2 border-dashed border-gray-300 p-2" />
-              <div className="flex-1">
-                <input type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm file:mr-4 file:py-3 file:px-6 file:rounded-lg file:bg-indigo-600 file:text-white" />
-                <p className="text-sm text-gray-500 mt-2">Max 5MB • PNG, JPG, SVG</p>
-                {logoFile && (
-                  <div className="mt-4 flex items-center gap-3">
-                    <button onClick={uploadLogo} disabled={isUploading} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                      {isUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Logo</>}
-                    </button>
-                    {uploadSuccess && <span className="text-green-600 flex items-center gap-2"><Check className="w-5 h-5" /> Uploaded!</span>}
-                  </div>
+        <div className="space-y-5">
+          {/* API Key */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              API Key
+            </label>
+            <div className="relative">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={settings.xaiApiKey}
+                onChange={(e) => setSettings({ ...settings, xaiApiKey: e.target.value })}
+                placeholder="xai-..."
+                className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 transition text-gray-100 placeholder-gray-500"
+              />
+              <div className="absolute right-3 top-3 flex gap-2">
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="p-2 hover:bg-gray-700 rounded-lg transition"
+                >
+                  {showApiKey ? <EyeOff size={18} className="text-gray-400" /> : <Eye size={18} className="text-gray-400" />}
+                </button>
+                {settings.xaiApiKey && (
+                  <button
+                    onClick={handleCopyKey}
+                    className="p-2 hover:bg-gray-700 rounded-lg transition"
+                  >
+                    {copied ? <Check size={18} className="text-green-400" /> : <Copy size={18} className="text-gray-400" />}
+                  </button>
                 )}
               </div>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Get your key from{' '}
+              <a href="https://console.x.ai" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300">
+                console.x.ai
+              </a>
+            </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border p-6">
-            <h2 className="text-xl font-semibold mb-6">xAI API Key</h2>
-            {settings?.apiKey ? (
-              <div className="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-700 rounded-lg font-mono text-sm">
-                <code>{settings.apiKey.slice(0, 12)}••••••••{settings.apiKey.slice(-8)}</code>
-                <button onClick={copyKey}>{copied ? <Check className="text-green-600" /> : <Copy size={18} />}</button>
-              </div>
-            ) : <p className="text-gray-500 italic mb-4">No API key configured</p>}
+          {/* Base URL */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              <Globe className="inline w-4 h-4 mr-1" />
+              API Base URL
+            </label>
+            <input
+              type="text"
+              value={settings.baseUrl}
+              onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 transition text-gray-100"
+            />
+          </div>
 
-            <div className="flex gap-3 mt-4">
-              <input type="password" placeholder="sk-ant-..." value={apiKey} onChange={e => setApiKey(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveApiKey()} className="flex-1 px-4 py-3 border rounded-lg" />
-              <button onClick={saveApiKey} disabled={!apiKey.trim()} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Save Key</button>
-            </div>
+          {/* Model */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Default Model
+            </label>
+            <select
+              value={settings.model}
+              onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500 transition text-gray-100"
+            >
+              <option value="grok-beta">Grok Beta (Latest)</option>
+              <option value="grok-2">Grok 2</option>
+              <option value="grok-1.5">Grok 1.5</option>
+            </select>
           </div>
         </div>
       </div>
+
+      {/* Appearance */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <Palette className="w-6 h-6 text-indigo-400" />
+          <h2 className="text-xl font-semibold text-gray-100">Appearance</h2>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Theme
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            {(['dark', 'light', 'system'] as const).map((theme) => (
+              <button
+                key={theme}
+                onClick={() => setSettings({ ...settings, theme })}
+                className={`px-6 py-3 rounded-lg border-2 transition font-medium capitalize ${
+                  settings.theme === theme
+                    ? 'border-indigo-500 bg-indigo-900 text-indigo-300'
+                    : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-600'
+                }`}
+              >
+                {theme === 'system' ? 'System' : theme}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Account & Data */}
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <User className="w-6 h-6 text-indigo-400" />
+          <h2 className="text-xl font-semibold text-gray-100">Account & Data</h2>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-red-900 hover:bg-red-800 rounded-lg transition font-medium text-white"
+          >
+            <LogOut size={20} />
+            Log Out
+          </button>
+
+          <button
+            onClick={handleClearData}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gray-900 hover:bg-gray-700 border border-red-800 rounded-lg transition font-medium text-red-400"
+          >
+            <Trash2 size={20} />
+            Clear All Local Data
+          </button>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-6">
+        <button
+          onClick={handleSave}
+          className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition font-medium text-white"
+        >
+          {saved ? (
+            <>
+              <Check size={20} />
+              Settings Saved!
+            </>
+          ) : (
+            <>
+              <Save size={20} />
+              Save Settings
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
-};
-
-SettingsPage.displayName = 'SettingsPage';
+}
