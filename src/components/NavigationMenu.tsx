@@ -1,156 +1,242 @@
-// src/components/NavigationMenu.tsx
-import React, { useState } from 'react';
-import {
-  Home,
-  MessageSquare,
-  FolderOpen,
-  Settings,
-  LogOut,
-  User,
-  Menu as MenuIcon,
-  X,
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useSettings } from '../hooks/useSettings';
-import { useNavigate } from 'react-router-dom';
+'use client';
 
-interface NavigationMenuProps {
-  currentView: 'home' | 'chat' | 'settings';
-  onOpenSettings: () => void;
-  onLogout?: () => void;
-  userName: string;
+import { useState, useRef, useEffect, MouseEvent } from 'react';
+import { Menu as MenuIcon, X, ChevronDown, Search, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export interface MenuItem {
+  label: string;
+  href?: string;
+  icon?: React.ReactNode;
+  children?: MenuItem[];
 }
 
-const FALLBACK_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+interface NavigationProps {
+  items?: MenuItem[];
+  logo?: React.ReactNode;
+  className?: string;
+}
 
-export const NavigationMenu: React.FC<NavigationMenuProps> = ({
-  currentView,
-  onOpenSettings,
-  onLogout,
-  userName,
-}) => {
-  const navigate = useNavigate();
-  const { settings } = useSettings();
+const defaultItems: MenuItem[] = [
+  { label: 'Home', href: '/' },
+  {
+    label: 'Products',
+    children: [
+      { label: 'Product One', href: '/products/one' },
+      { label: 'Product Two', href: '/products/two' },
+      { label: 'Product Three', href: '/products/three' },
+    ],
+  },
+  {
+    label: 'Services',
+    children: [
+      { label: 'Consulting', href: '/services/consulting' },
+      { label: 'Support', href: '/services/support' },
+      { label: 'Training', href: '/services/training' },
+    ],
+  },
+  { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
+];
+
+export default function Navigation({
+  items = defaultItems,
+  logo = (
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
+        <span className="text-white font-bold text-xl">G</span>
+      </div>
+      <span className="text-xl font-bold text-gray-900 hidden md:block">Grok Chat</span>
+    </div>
+  ),
+  className = '',
+}: NavigationProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const logoUrl = settings?.logoUrl || FALLBACK_LOGO;
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent<Document>) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside as any);
+    return () => document.removeEventListener('mousedown', handleClickOutside as any);
+  }, []);
 
-  const navItems = [
-    { icon: Home, label: 'Home', path: '/', view: 'home' },
-    { icon: MessageSquare, label: 'Chat', path: '/chat', view: 'chat' },
-    { icon: FolderOpen, label: 'Projects', path: '/projects', view: 'projects' },
-  ];
+  const toggleDropdown = (label: string) => {
+    setOpenDropdown(prev => (prev === label ? null : label));
+  };
+
+  const NavLink = ({ item }: { item: MenuItem }) => (
+    <a
+      href={item.href || '#'}
+      className="px-4 py-2 text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-2"
+      onClick={() => setMobileOpen(false)}
+    >
+      {item.icon}
+      {item.label}
+    </a>
+  );
 
   return (
     <>
-      {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-16 flex items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <img src={logoUrl} alt="Logo" className="h-9 w-9 rounded-lg object-contain" />
-          <h1 className="text-xl font-bold">xAI Coder</h1>
-        </div>
-        <button onClick={() => setMobileOpen(true)} className="p-2">
-          <MenuIcon size={28} />
-        </button>
-      </header>
+      <nav className={`bg-white border-b border-gray-200 sticky top-0 z-50 ${className}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <div className="flex-shrink-0 flex items-center">{logo}</div>
 
-      {/* Sidebar — Slide-out on mobile, fixed on desktop */}
-      <motion.aside
-        initial={false}
-        animate={{ x: mobileOpen ? 0 : window.innerWidth >= 1024 ? 0 : -280 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col lg:relative lg:translate-x-0 lg:z-auto"
-      >
-        {/* Header */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-gray-200 dark:border-gray-800 lg:h-auto lg:py-6">
-          <img
-            src={logoUrl}
-            alt="xAI Coder"
-            className="h-10 w-10 rounded-lg object-contain bg-gray-100"
-            onError={(e) => (e.currentTarget.src = FALLBACK_LOGO)}
-          />
-          <h1 className="text-2xl font-bold hidden lg:block">xAI Coder</h1>
-          <button onClick={() => setMobileOpen(false)} className="ml-auto lg:hidden">
-            <X size={28} />
-          </button>
-        </div>
+            {/* Desktop Navigation */}
+            <div className="hidden lg:flex items-center gap-8 flex-1 justify-center" ref={dropdownRef}>
+              {items.map((item) => (
+                <div key={item.label} className="relative">
+                  {item.children ? (
+                    <>
+                      <button
+                        onClick={() => toggleDropdown(item.label)}
+                        className="flex items-center gap-1 px-4 py-2 text-gray-700 hover:text-blue-600 transition-colors font-medium"
+                        aria-haspopup="true"
+                        aria-expanded={openDropdown === item.label}
+                      >
+                        {item.label}
+                        <ChevronDown
+                          size={16}
+                          className={`transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`}
+                        />
+                      </button>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = currentView === item.view;
-            return (
-              <button
-                key={item.label}
-                onClick={() => {
-                  navigate(item.path);
-                  setMobileOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  active
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 font-medium'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                <Icon size={20} />
-                <span>{item.label}</span>
-                {active && <div className="ml-auto w-1.5 h-8 bg-blue-600 rounded-full" />}
-              </button>
-            );
-          })}
-
-          <div className="h-px bg-gray-200 dark:bg-gray-800 my-6" />
-
-          <button
-            onClick={() => {
-              onOpenSettings();
-              setMobileOpen(false);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <Settings size={20} />
-            <span>Settings</span>
-          </button>
-
-          {onLogout && (
-            <button
-              onClick={() => {
-                onLogout();
-                setMobileOpen(false);
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-            >
-              <LogOut size={20} />
-              <span>Logout</span>
-            </button>
-          )}
-        </nav>
-
-        {/* User Profile */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
-              <User size={20} className="text-white" />
+                      <AnimatePresence>
+                        {openDropdown === item.label && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
+                          >
+                            <div className="py-2">
+                              {item.children.map((child) => (
+                                <a
+                                  key={child.label}
+                                  href={child.href}
+                                  className="block px-6 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-3"
+                                  onClick={() => setOpenDropdown(null)}
+                                >
+                                  {child.icon}
+                                  {child.label}
+                                </a>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  ) : (
+                    <NavLink item={item} />
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">{userName}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Developer</p>
+
+            {/* Right Actions */}
+            <div className="flex items-center gap-4">
+              {/* Search */}
+              <div className="hidden md:block relative">
+                <AnimatePresence>
+                  {searchOpen ? (
+                    <motion.input
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: 240, opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-4 py-2 pr-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                  ) : null}
+                </AnimatePresence>
+                <button
+                  onClick={() => setSearchOpen(!searchOpen)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  aria-label="Toggle search"
+                >
+                  <Search size={20} className="text-gray-600" />
+                </button>
+              </div>
+
+              {/* User Profile */}
+              <button className="p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="User menu">
+                <User size={20} className="text-gray-600" />
+              </button>
+
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Toggle mobile menu"
+              >
+                {mobileOpen ? <X size={24} /> : <MenuIcon size={24} />}
+              </button>
             </div>
           </div>
         </div>
-      </motion.aside>
 
-      {/* Mobile Overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      {/* Mobile top padding */}
-      <div className="h-16 lg:hidden" />
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="lg:hidden border-t border-gray-200 bg-white"
+            >
+              <div className="px-4 py-4 space-y-1">
+                {items.map((item) => (
+                  <div key={item.label}>
+                    {item.children ? (
+                      <>
+                        <button className="w-full text-left px-4 py-3 font-medium text-gray-900 flex items-center justify-between">
+                          {item.label}
+                          <ChevronDown size={18} />
+                        </button>
+                        <div className="pl-6 space-y-1">
+                          {item.children.map((child) => (
+                            <a
+                              key={child.label}
+                              href={child.href}
+                              className="block px-4 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {child.label}
+                            </a>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <a
+                        href={item.href}
+                        className="block px-4 py-3 text-gray-900 font-medium hover:bg-blue-50 rounded-lg transition-colors"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {item.label}
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
     </>
   );
-};
+}
