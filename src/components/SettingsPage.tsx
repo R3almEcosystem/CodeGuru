@@ -11,9 +11,11 @@ import {
   Check,
   Copy,
   Eye,
-  EyeOff
+  EyeOff,
+  X   // ← added for the close button
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom'; // not needed – we just call a prop
 
 interface Settings {
   xaiApiKey: string;
@@ -22,7 +24,11 @@ interface Settings {
   theme: 'dark' | 'light' | 'system';
 }
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  onClose: () => void;   // ← new prop so the parent (App.tsx) can close the page
+}
+
+export function SettingsPage({ onClose }: SettingsPageProps) {
   const [settings, setSettings] = useState<Settings>({
     xaiApiKey: '',
     baseUrl: 'https://api.x.ai/v1',
@@ -70,15 +76,23 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="border-b border-gray-700 pb-6">
+    <div className="max-w-4xl mx-auto">
+      {/* Top bar with close button */}
+      <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold text-gray-100">Settings</h1>
-        <p className="text-gray-400 mt-2">Configure your xAI Coder experience</p>
+        <button
+          onClick={onClose}
+          className="p-2 rounded-lg hover:bg-gray-800 transition text-gray-400 hover:text-white"
+          aria-label="Close settings"
+        >
+          <X size={28} />
+        </button>
       </div>
 
+      <p className="text-gray-400 mb-8">Configure your xAI Coder experience</p>
+
       {/* API Configuration */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6 mb-8">
         <div className="flex items-center gap-3">
           <Key className="w-6 h-6 text-indigo-400" />
           <h2 className="text-xl font-semibold text-gray-100">xAI API Configuration</h2>
@@ -168,15 +182,12 @@ export function SettingsPage() {
                 <option value="grok-beta">Grok Beta (Deprecated - Use Grok 4)</option>
               </optgroup>
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              "Auto" selects the best available model. Knowledge cutoff: November 2024 for Grok 3/2. Use aliases like "grok-4-latest" for auto-updates.
-            </p>
           </div>
         </div>
       </div>
 
       {/* Appearance */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6 mb-8">
         <div className="flex items-center gap-3">
           <Palette className="w-6 h-6 text-indigo-400" />
           <h2 className="text-xl font-semibold text-gray-100">Appearance</h2>
@@ -205,7 +216,7 @@ export function SettingsPage() {
       </div>
 
       {/* Account & Data */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-6 mb-8">
         <div className="flex items-center gap-3">
           <User className="w-6 h-6 text-indigo-400" />
           <h2 className="text-xl font-semibold text-gray-100">Account & Data</h2>
@@ -231,7 +242,7 @@ export function SettingsPage() {
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end pt-6">
+      <div className="flex justify-end">
         <button
           onClick={handleSave}
           className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition font-medium text-white"
