@@ -1,4 +1,4 @@
-// src/App.tsx — FULL GROK CHAT WITH REAL xAI API + SETTINGS INTEGRATION
+// src/App.tsx — FIXED: Supabase project_id + xAI API Errors
 import React, { useEffect, useState, useRef } from 'react';
 import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Copy, Check, AlertCircle } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -37,8 +37,9 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [settings, setSettings] = useState<{ xaiApiKey: string; model: string }>({
-    xaiApiKey: 'xai-9JN1qOTaXnBhnKCflQBa6xj26dO5vDpN79AJmLuQY1on7Fv2lHkpZ1l5RmVcOxO8EDKEZh28yKEEMTE4',
+    xaiApiKey: '', // Will load from localStorage; update in Settings
     model: 'grok-beta',
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -50,7 +51,10 @@ export default function App() {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      setSettings({ xaiApiKey: parsed.xaiApiKey || settings.xaiApiKey, model: parsed.model || 'grok-beta' });
+      setSettings({ 
+        xaiApiKey: parsed.xaiApiKey || '', 
+        model: parsed.model || 'grok-beta' 
+      });
     }
   }, []);
 
@@ -70,8 +74,13 @@ export default function App() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
 
-      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-      setProjects(data || []);
+      try {
+        const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+        setProjects(data || []);
+      } catch (err) {
+        setDbError('Failed to load projects. Check Supabase connection.');
+        console.error('Projects load error:', err);
+      }
       setLoading(false);
     };
     init();
@@ -85,7 +94,19 @@ export default function App() {
         .select('*')
         .eq('project_id', selectedProjectId)
         .order('created_at', { ascending: true })
-        .then(({ data }) => setMessages(data || []));
+        .then(({ data, error }) => {
+          if (error) {
+            setDbError(`Failed to load messages: ${error.message}. Ensure 'project_id' column exists in 'messages' table.`);
+            console.error('Messages load error:', error);
+            setMessages([]);
+          } else {
+            setMessages(data || []);
+          }
+        })
+        .catch(err => {
+          setDbError('Network error loading messages.');
+          console.error('Messages load error:', err);
+        });
     } else {
       setMessages([]);
     }
@@ -101,19 +122,25 @@ export default function App() {
 
   const createProject = async () => {
     const title = prompt('Project name:', 'New AI Project') || 'New Project';
+    if (!title) return;
     const payload: any = { title };
     if (user?.id) payload.user_id = user.id;
 
-    const { data } = await supabase
-      .from('projects')
-      .insert(payload)
-      .select()
-      .single();
+    try {
+      const { data } = await supabase
+        .from('projects')
+        .insert(payload)
+        .select()
+        .single();
 
-    if (data) {
-      setProjects(p => [data, ...p]);
-      setSelectedProjectId(data.id);
-      setActiveTab('chat');
+      if (data) {
+        setProjects(p => [data, ...p]);
+        setSelectedProjectId(data.id);
+        setActiveTab('chat');
+      }
+    } catch (err) {
+      setDbError('Failed to create project.');
+      console.error('Project creation error:', err);
     }
   };
 
@@ -133,23 +160,26 @@ export default function App() {
     setIsTyping(true);
     setApiError(null);
 
-    // Save user message to Supabase
-    await supabase.from('messages').insert({
-      project_id: selectedProjectId,
-      role: 'user',
-      content: tempInput,
-    });
-
-    // Prepare full conversation history for API
-    const apiMessages = messages.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: tempInput });
-
-    // Call xAI API with settings
     try {
+      // Save user message to Supabase
+      await supabase.from('messages').insert({
+        project_id: selectedProjectId,
+        role: 'user',
+        content: tempInput,
+      });
+
+      // Prepare full conversation history for API
+      const apiMessages = messages
+        .filter(m => m.role !== 'assistant' || m.content !== 'No response') // Clean up placeholders
+        .map(m => ({ role: m.role, content: m.content }))
+        .concat({ role: 'user', content: tempInput });
+
+      // Call xAI API with settings
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.xaiApiKey}`,
+          'Authorization': `Bearer ${settings.xaiApiKey || ''}`,
         },
         body: JSON.stringify({
           model: settings.model || 'grok-beta',
@@ -161,12 +191,13 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.error?.message || `HTTP ${response.status} - Check your API key in Settings.`;
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
-      const assistantContent = data.choices?.[0]?.message?.content || 'No response received. Check your API key and model.';
+      const assistantContent = data.choices?.[0]?.message?.content || 'No response received. Try a different model.';
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -184,7 +215,7 @@ export default function App() {
       });
     } catch (error) {
       console.error('API Error:', error);
-      setApiError(error instanceof Error ? error.message : 'Failed to send message. Check your API key in Settings.');
+      setApiError(error instanceof Error ? error.message : 'Failed to send message. Check console.');
     } finally {
       setIsTyping(false);
     }
@@ -301,11 +332,14 @@ export default function App() {
               {/* Chat Tab */}
               {activeTab === 'chat' && (
                 <div className="flex-1 flex flex-col bg-gray-900 relative">
-                  {apiError && (
+                  {(apiError || dbError) && (
                     <div className="p-4 bg-red-900 border-b border-red-800 flex items-center gap-3">
                       <AlertCircle size={20} className="text-red-400" />
-                      <span className="text-red-300">{apiError}</span>
-                      <button onClick={() => setApiError(null)} className="ml-auto text-red-400 hover:text-red-300">
+                      <span className="text-red-300">{apiError || dbError}</span>
+                      <button 
+                        onClick={() => { setApiError(null); setDbError(null); }} 
+                        className="ml-auto text-red-400 hover:text-red-300"
+                      >
                         Dismiss
                       </button>
                     </div>
@@ -316,6 +350,7 @@ export default function App() {
                         <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
                         <h2 className="text-2xl font-bold mb-2">Start coding with Grok</h2>
                         <p>Ask anything — write code, debug, explain concepts</p>
+                        {settings.xaiApiKey ? '' : <p className="text-sm mt-4 text-yellow-400">Tip: Set your xAI API key in Settings for real responses.</p>}
                       </div>
                     ) : (
                       messages.map(msg => (
