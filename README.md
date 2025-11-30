@@ -1,4 +1,4 @@
-# xAI Coder
+Code Guru
 
 A production-grade, AI-powered cloud IDE built with React 18, TypeScript, Vite, Tailwind CSS, and Supabase. Seamlessly integrates xAI's Grok models for intelligent coding assistance, file management, and collaborative projects.
 
