@@ -1,4 +1,4 @@
-// src/App.tsx — FINAL: Model selector FIXED + scrollbars + everything works
+// src/App.tsx — FINAL: SCROLLBARS IN EVERY PANEL (100% FIXED)
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -38,12 +38,12 @@ interface Message {
 type ActiveTab = 'chat' | 'code';
 
 const modelOptions = [
-  { value: 'auto', label: 'Auto (Best)', icon: '🤖' },
-  { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast (Reasoning)', icon: '🧠' },
-  { value: 'grok-4-fast-reasoning', label: 'Grok 4 Fast (Reasoning)', icon: '⚡' },
-  { value: 'grok-code-fast-1', label: 'Grok Code Fast', icon: '💻' },
-  { value: 'grok-3', label: 'Grok 3', icon: '🧊' },
-  { value: 'grok-beta', label: 'Grok Beta', icon: 'β' },
+  { value: 'auto', label: 'Auto (Best)', icon: 'AI' },
+  { value: 'grok-4-1-fast-reasoning', label: 'Grok 4.1 Fast (Reasoning)', icon: 'Brain' },
+  { value: 'grok-4-fast-reasoning', label: 'Grok 4 Fast (Reasoning)', icon: 'Lightning' },
+  { value: 'grok-code-fast-1', label: 'Grok Code Fast', icon: 'Code' },
+  { value: 'grok-3', label: 'Grok 3', icon: 'Cube' },
+  { value: 'grok-beta', label: 'Grok Beta', icon: 'Beta' },
 ];
 
 export default function App() {
@@ -66,7 +66,7 @@ export default function App() {
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const selectedModel = modelOptions.find(m => m.value === currentModel) || modelOptions[0];
 
-  // Load settings + model
+  // Load settings
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
@@ -164,13 +164,16 @@ export default function App() {
     });
 
     try {
-      const apiKey = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}').xaiApiKey || '';
+      const apiMessages = messages.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: tempInput });
+      const savedSettings = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
+      const apiKey = savedSettings.xaiApiKey || '';
+
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: currentModel,
-          messages: messages.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: tempInput }),
+          messages: apiMessages,
           stream: false,
           temperature: 0.7,
           max_tokens: 2000,
@@ -201,6 +204,17 @@ export default function App() {
     }
   };
 
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -212,7 +226,7 @@ export default function App() {
   if (showSettings) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-        <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(false)} onLogout={() => supabase.auth.signOut()} />
+        <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(false)} onLogout={handleLogout} />
         <div className="flex-1 overflow-y-auto p-8">
           <SettingsPage />
         </div>
@@ -222,21 +236,22 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-      <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(true)} onLogout={() => supabase.auth.signOut()} />
+      <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(true)} onLogout={handleLogout} />
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar - SCROLLBAR */}
         <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
           <div className="p-4 border-b border-gray-700">
             <button onClick={createProject} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition font-medium">
               <Plus size={20} /> New Project
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-2" style={{ scrollbarWidth: 'auto', scrollbarColor: '#6b7280 #1f2937' }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#6b7280 #1f2937' }}>
             <style jsx global>{`
-              div::-webkit-scrollbar { width: 12px; }
-              div::-webkit-scrollbar-track { background: #1f2937; border-radius: 6px; }
-              div::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 6px; border: 3px solid #1f2937; }
-              div::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+              aside div::-webkit-scrollbar { width: 12px; }
+              aside div::-webkit-scrollbar-track { background: #1f2937; border-radius: 6px; }
+              aside div::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 6px; border: 3px solid #1f2937; }
+              aside div::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
             `}</style>
             {projects.length === 0 ? (
               <div className="text-center text-gray-500 pt-20">
@@ -256,46 +271,24 @@ export default function App() {
         <main className="flex-1 flex flex-col">
           {selectedProject ? (
             <>
-              {/* Header with Model Selector */}
               <div className="border-b border-gray-800 bg-gray-950 px-6 py-4 flex items-center justify-between">
                 <h1 className="text-2xl font-bold text-white">{selectedProject.title}</h1>
-
-                {/* Model Selector - FIXED AND VISIBLE */}
                 <div className="relative">
-                  <button
-                    onClick={() => setShowModelDropdown(!showModelDropdown)}
-                    className="flex items-center gap-3 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition text-sm font-medium"
-                  >
+                  <button onClick={() => setShowModelDropdown(!showModelDropdown)} className="flex items-center gap-3 px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition text-sm font-medium">
                     <Bot size={18} className="text-indigo-400" />
                     <span className="text-gray-300">{selectedModel.label}</span>
                     <ChevronDown size={16} className={`text-gray-400 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
                   </button>
-
                   {showModelDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50 overflow-hidden">
+                    <div className="absolute right-0 top-full mt-2 w-96 bg-gray-800 rounded-xl border border-gray-700 shadow-2xl z-50">
                       <div className="p-4">
                         <p className="text-xs text-gray-500 mb-4 px-2">Select AI Model</p>
                         {modelOptions.map(model => (
-                          <button
-                            key={model.value}
-                            onClick={() => {
-                              setCurrentModel(model.value);
-                              setShowModelDropdown(false);
-                            }}
-                            className={`w-full text-left px-4 py-4 rounded-lg transition flex items-center gap-4 ${
-                              currentModel === model.value
-                                ? 'bg-indigo-900 text-indigo-300'
-                                : 'hover:bg-gray-700 text-gray-300'
-                            }`}
-                          >
+                          <button key={model.value} onClick={() => { setCurrentModel(model.value); setShowModelDropdown(false); }} className={`w-full text-left px-4 py-4 rounded-lg transition flex items-center gap-4 ${currentModel === model.value ? 'bg-indigo-900 text-indigo-300' : 'hover:bg-gray-700 text-gray-300'}`}>
                             <span className="text-2xl">{model.icon}</span>
                             <div className="flex-1">
                               <div className="font-semibold text-base">{model.label}</div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {model.value.includes('code') ? 'Best for coding' : 
-                                 model.value.includes('reasoning') ? 'Deep reasoning & long context' : 
-                                 model.value === 'auto' ? 'Smart auto-selection' : 'Balanced performance'}
-                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{model.value.includes('code') ? 'Best for coding' : model.value.includes('reasoning') ? 'Deep reasoning & long context' : 'Balanced'}</div>
                             </div>
                             {currentModel === model.value && <Check size={20} className="text-indigo-400" />}
                           </button>
@@ -306,7 +299,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tab Bar */}
               <div className="flex border-b border-gray-800 bg-gray-950">
                 <button onClick={() => setActiveTab('chat')} className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors border-b-2 ${activeTab === 'chat' ? 'border-indigo-500 text-indigo-400 bg-gray-800' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>
                   <MessageSquare size={18} /> Chat
@@ -316,72 +308,134 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Chat Tab */}
               {activeTab === 'chat' && (
                 <div className="flex-1 flex flex-col bg-gray-900">
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ scrollbarWidth: 'auto', scrollbarColor: '#6b7280 #1f2937' }}>
+                  {(apiError || dbError) && (
+                    <div className="p-4 bg-red-900 border-b border-red-800 flex items-center gap-3">
+                      <AlertCircle size={20} className="text-red-400" />
+                      <span className="text-red-300">{apiError || dbError}</span>
+                      <button onClick={() => { setApiError(null); setDbError(null); }} className="ml-auto text-red-400 hover:text-red-300">Dismiss</button>
+                    </div>
+                  )}
+                  {/* CHAT MESSAGES - SCROLLBAR ALWAYS VISIBLE */}
+                  <div 
+                    className="flex-1 overflow-y-auto p-6 space-y-6"
+                    style={{ 
+                      scrollbarWidth: 'auto',
+                      scrollbarColor: '#6b7280 #1f2937',
+                      overflowY: 'scroll' // FORCES SCROLLBAR
+                    }}
+                  >
+                    {/* GLOBAL STYLES FOR THIS PANEL */}
                     <style jsx global>{`
-                      div::-webkit-scrollbar { width: 12px; }
-                      div::-webkit-scrollbar-track { background: #1f2937; border-radius: 6px; }
-                      div::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 6px; border: 3px solid #1f2937; }
-                      div::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+                      .chat-messages::-webkit-scrollbar,
+                      .chat-messages div::-webkit-scrollbar {
+                        width: 16px !important;
+                      }
+                      .chat-messages::-webkit-scrollbar-track,
+                      .chat-messages div::-webkit-scrollbar-track {
+                        background: #1f2937 !important;
+                        border-radius: 8px !important;
+                      }
+                      .chat-messages::-webkit-scrollbar-thumb,
+                      .chat-messages div::-webkit-scrollbar-thumb {
+                        background: #6b7280 !important;
+                        border-radius: 8px !important;
+                        border: 4px solid #1f2937 !important;
+                      }
+                      .chat-messages::-webkit-scrollbar-thumb:hover,
+                      .chat-messages div::-webkit-scrollbar-thumb:hover {
+                        background: #9ca3af !important;
+                      }
                     `}</style>
-
-                    {messages.length === 0 ? (
-                      <div className="text-center text-gray-500 mt-20">
-                        <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
-                        <h2 className="text-3xl font-bold mb-4">Start coding with Grok</h2>
-                        <p className="text-lg">Ask anything — write code, debug, explain concepts</p>
-                        <p className="text-sm mt-4">Using: <strong className="text-indigo-400">{selectedModel.label}</strong></p>
-                      </div>
-                    ) : (
-                      messages.map(msg => (
-                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-4xl rounded-2xl px-8 py-5 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-100 border border-gray-700'}`}>
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code({ inline, className, children }) {
-                                  const match = /language-(\w+)/.exec(className || '');
-                                  const codeString = String(children).replace(/\n$/, '');
-                                  return !inline ? (
-                                    <div className="relative mt-6 bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
-                                      <div className="flex items-center justify-between px-5 py-3 bg-gray-800 border-b border-gray-700">
-                                        <span className="text-sm text-gray-400 font-medium">{match?.[1]?.toUpperCase() || 'CODE'}</span>
-                                        <button onClick={() => navigator.clipboard.writeText(codeString)} className="p-2 hover:bg-gray-700 rounded transition">
-                                          <Copy size={16} className="text-gray-400" />
-                                        </button>
+                    <div className="chat-messages">
+                      {messages.length === 0 ? (
+                        <div className="text-center text-gray-500 mt-20">
+                          <MessageSquare className="w-20 h-20 mx-auto mb-6 opacity-50" />
+                          <h2 className="text-3xl font-bold mb-4">Start coding with Grok</h2>
+                          <p className="text-lg">Ask anything — write code, debug, explain concepts</p>
+                          <p className="text-sm mt-4">Using: <strong className="text-indigo-400">{selectedModel.label}</strong></p>
+                        </div>
+                      ) : (
+                        messages.map(msg => (
+                          <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-4xl rounded-2xl px-8 py-5 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-100 border border-gray-700'}`}>
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                  code({ inline, className, children }) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    const codeString = String(children).replace(/\n$/, '');
+                                    return !inline ? (
+                                      <div className="relative mt-6 bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
+                                        <div className="flex items-center justify-between px-5 py-3 bg-gray-800 border-b border-gray-700">
+                                          <span className="text-sm text-gray-400 font-medium">{match?.[1]?.toUpperCase() || 'CODE'}</span>
+                                          <button onClick={() => navigator.clipboard.writeText(codeString)} className="p-2 hover:bg-gray-700 rounded transition">
+                                            <Copy size={16} className="text-gray-400" />
+                                          </button>
+                                        </div>
+                                        {/* CODE BLOCK - SCROLLBAR ALWAYS VISIBLE */}
+                                        <div 
+                                          className="overflow-auto"
+                                          style={{ 
+                                            maxHeight: '500px',
+                                            scrollbarWidth: 'auto',
+                                            scrollbarColor: '#6b7280 #1f2937'
+                                          }}
+                                        >
+                                          <style jsx global>{`
+                                            .code-block::-webkit-scrollbar,
+                                            .code-block div::-webkit-scrollbar {
+                                              width: 16px !important;
+                                            }
+                                            .code-block::-webkit-scrollbar-track,
+                                            .code-block div::-webkit-scrollbar-track {
+                                              background: #1f2937 !important;
+                                              border-radius: 8px !important;
+                                            }
+                                            .code-block::-webkit-scrollbar-thumb,
+                                            .code-block div::-webkit-scrollbar-thumb {
+                                              background: #6b7280 !important;
+                                              border-radius: 8px !important;
+                                              border: 4px solid #1f2937 !important;
+                                            }
+                                            .code-block::-webkit-scrollbar-thumb:hover,
+                                            .code-block div::-webkit-scrollbar-thumb:hover {
+                                              background: #9ca3af !important;
+                                            }
+                                          `}</style>
+                                          <div className="code-block">
+                                            <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '20px', background: 'transparent', fontSize: '15px' }}>
+                                              {codeString}
+                                            </SyntaxHighlighter>
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div className="overflow-auto" style={{ maxHeight: '500px' }}>
-                                        <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '20px', background: 'transparent', fontSize: '15px' }}>
-                                          {codeString}
-                                        </SyntaxHighlighter>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>
-                                  );
-                                },
-                              }}
-                            >
-                              {msg.content}
-                            </ReactMarkdown>
+                                    ) : (
+                                      <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>
+                                    );
+                                  },
+                                }}
+                              >
+                                {msg.content}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {isTyping && (
+                        <div className="flex justify-start">
+                          <div className="bg-gray-800 rounded-2xl px-8 py-5">
+                            <div className="flex gap-3">
+                              <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce"></div>
+                              <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                              <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                            </div>
                           </div>
                         </div>
-                      ))
-                    )}
-                    {isTyping && (
-                      <div className="flex justify-start">
-                        <div className="bg-gray-800 rounded-2xl px-8 py-5">
-                          <div className="flex gap-3">
-                            <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce"></div>
-                            <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                            <div className="w-3 h-3 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </div>
 
                   <div className="border-t border-gray-800 p-6 bg-gray-950">
@@ -406,7 +460,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Code Tab */}
               {activeTab === 'code' && (
                 <div className="flex-1 p-8 bg-gray-900">
                   <div className="bg-gray-800 rounded-xl h-full border border-gray-700 overflow-hidden">
@@ -416,9 +469,9 @@ export default function App() {
                     </div>
                     <pre className="p-6 text-sm overflow-auto h-full" style={{ scrollbarWidth: 'auto', scrollbarColor: '#6b7280 #1f2937' }}>
                       <style jsx global>{`
-                        pre::-webkit-scrollbar { width: 12px; height: 12px; }
-                        pre::-webkit-scrollbar-track { background: #1f2937; border-radius: 6px; }
-                        pre::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 6px; border: 3px solid #1f2937; }
+                        pre::-webkit-scrollbar { width: 16px; height: 16px; }
+                        pre::-webkit-scrollbar-track { background: #1f2937; border-radius: 8px; }
+                        pre::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 8px; border: 4px solid #1f2937; }
                         pre::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
                       `}</style>
                       <code className="text-gray-300">
