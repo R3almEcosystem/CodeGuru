@@ -1,4 +1,4 @@
-// src/App.tsx — WITH CUSTOM DARK SCROLLBARS (LIKE VS CODE)
+// src/App.tsx — FIXED: Code blocks now have scrollbars!
 import React, { useEffect, useState, useRef } from 'react';
 import { 
   Loader2, 
@@ -411,16 +411,33 @@ export default function App() {
                                   const match = /language-(\w+)/.exec(className || '');
                                   const codeString = String(children).replace(/\n$/, '');
                                   return !inline ? (
-                                    <div className="relative mt-4">
-                                      <button
-                                        onClick={() => copyToClipboard(codeString, msg.id)}
-                                        className="absolute top-3 right-3 p-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
-                                      >
-                                        {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-                                      </button>
-                                      <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div">
-                                        {codeString}
-                                      </SyntaxHighlighter>
+                                    <div className="relative mt-4 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                                      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                                        <span className="text-xs text-gray-400 font-medium">
+                                          {match?.[1] ? match[1].toUpperCase() : 'CODE'}
+                                        </span>
+                                        <button
+                                          onClick={() => copyToClipboard(codeString, msg.id)}
+                                          className="p-2 hover:bg-gray-700 rounded transition"
+                                        >
+                                          {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
+                                        </button>
+                                      </div>
+                                      <div className="overflow-x-auto custom-scrollbar">
+                                        <SyntaxHighlighter 
+                                          style={vscDarkPlus} 
+                                          language={match?.[1] || 'text'} 
+                                          PreTag="div"
+                                          customStyle={{
+                                            margin: 0,
+                                            padding: '16px',
+                                            background: 'transparent',
+                                            fontSize: '14px',
+                                          }}
+                                        >
+                                          {codeString}
+                                        </SyntaxHighlighter>
+                                      </div>
                                     </div>
                                   ) : (
                                     <code className="px-2 py-1 bg-gray-700 rounded text-sm" {...props}>
@@ -513,6 +530,7 @@ print("Hello from xAI Coder!")
         }
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
+          height: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: #1f2937;
@@ -524,6 +542,9 @@ print("Hello from xAI Coder!")
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #6b7280;
+        }
+        .custom-scrollbar::-webkit-scrollbar-corner {
+          background: transparent;
         }
       `}</style>
     </div>
