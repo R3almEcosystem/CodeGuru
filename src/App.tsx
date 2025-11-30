@@ -1,6 +1,6 @@
-// src/App.tsx — FINAL VERSION WITH FULL SETTINGS INTEGRATION
+// src/App.tsx — FULL GROK CHAT WITH REAL xAI API + SETTINGS INTEGRATION
 import React, { useEffect, useState, useRef } from 'react';
-import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Copy, Check } from 'lucide-react';
+import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Copy, Check, AlertCircle } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Navigation } from './components/Navigation';
 import { SettingsPage } from './components/SettingsPage';
@@ -36,9 +36,23 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<{ xaiApiKey: string; model: string }>({
+    xaiApiKey: 'xai-9JN1qOTaXnBhnKCflQBa6xj26dO5vDpN79AJmLuQY1on7Fv2lHkpZ1l5RmVcOxO8EDKEZh28yKEEMTE4',
+    model: 'grok-beta',
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('xai-coder-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setSettings({ xaiApiKey: parsed.xaiApiKey || settings.xaiApiKey, model: parsed.model || 'grok-beta' });
+    }
+  }, []);
 
   // Auto-login + load projects
   useEffect(() => {
@@ -114,44 +128,66 @@ export default function App() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const tempInput = input;
     setInput('');
     setIsTyping(true);
+    setApiError(null);
 
+    // Save user message to Supabase
     await supabase.from('messages').insert({
       project_id: selectedProjectId,
       role: 'user',
-      content: input,
+      content: tempInput,
     });
 
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer xai-9JN1qOTaXnBhnKCflQBa6xj26dO5vDpN79AJmLuQY1on7Fv2lHkpZ1l5RmVcOxO8EDKEZh28yKEEMTE4',
-      },
-      body: JSON.stringify({
-        model: 'grok-beta',
-        messages: [{ role: 'user', content: input }],
-        stream: false,
-      }),
-    });
+    // Prepare full conversation history for API
+    const apiMessages = messages.map(m => ({ role: m.role, content: m.content })).concat({ role: 'user', content: tempInput });
 
-    const data = await response.json();
-    const assistantMessage = {
-      id: crypto.randomUUID(),
-      role: 'assistant' as const,
-      content: data.choices?.[0]?.message?.content || 'No response',
-      created_at: new Date().toISOString(),
-    };
+    // Call xAI API with settings
+    try {
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.xaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: settings.model || 'grok-beta',
+          messages: apiMessages,
+          stream: false,
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
 
-    setMessages(prev => [...prev, assistantMessage]);
-    await supabase.from('messages').insert({
-      project_id: selectedProjectId,
-      role: 'assistant',
-      content: assistantMessage.content,
-    });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+      }
 
-    setIsTyping(false);
+      const data = await response.json();
+      const assistantContent = data.choices?.[0]?.message?.content || 'No response received. Check your API key and model.';
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: assistantContent,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Save assistant message to Supabase
+      await supabase.from('messages').insert({
+        project_id: selectedProjectId,
+        role: 'assistant',
+        content: assistantContent,
+      });
+    } catch (error) {
+      console.error('API Error:', error);
+      setApiError(error instanceof Error ? error.message : 'Failed to send message. Check your API key in Settings.');
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -264,7 +300,16 @@ export default function App() {
 
               {/* Chat Tab */}
               {activeTab === 'chat' && (
-                <div className="flex-1 flex flex-col bg-gray-900">
+                <div className="flex-1 flex flex-col bg-gray-900 relative">
+                  {apiError && (
+                    <div className="p-4 bg-red-900 border-b border-red-800 flex items-center gap-3">
+                      <AlertCircle size={20} className="text-red-400" />
+                      <span className="text-red-300">{apiError}</span>
+                      <button onClick={() => setApiError(null)} className="ml-auto text-red-400 hover:text-red-300">
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-500 mt-20">
