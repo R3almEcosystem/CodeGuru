@@ -1,12 +1,6 @@
-// src/App.tsx — RESTORED FINAL WORKING VERSION (November 30, 2025)
+// src/App.tsx — THIS IS THE ONE THAT WORKS (copy-paste exactly)
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  Loader2,
-  Plus,
-  MessageSquare,
-  Send,
-  Copy,
-} from 'lucide-react';
+import { Loader2, Plus, MessageSquare, Send, Copy } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Navigation } from './components/Navigation';
 import { SettingsPage } from './components/SettingsPage';
@@ -15,26 +9,9 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-interface Project {
-  id: string;
-  title: string;
-  created_at: string;
-}
-
-interface Conversation {
-  id: string;
-  project_id: string;
-  title: string;
-  created_at: string;
-}
-
-interface Message {
-  id: string;
-  conversation_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  created_at: string;
-}
+interface Project { id: string; title: string; created_at: string }
+interface Conversation { id: string; project_id: string; title: string; created_at: string }
+interface Message { id: string; conversation_id: string; role: 'user' | 'assistant'; content: string; created_at: string }
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -55,44 +32,29 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem('xai-coder-settings');
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.model) setCurrentModel(parsed.model);
-      } catch {}
+      try { const p = JSON.parse(saved); if (p.model) setCurrentModel(p.model); } catch {}
     }
   }, []);
 
   useEffect(() => {
-    const init = async () => {
+    async function init() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        await supabase.auth.signInWithPassword({
-          email: 'test@example.com',
-          password: '123456',
-        }).catch(() => supabase.auth.signUp({ email: 'test@example.com', password: '123456' }));
+        await supabase.auth.signInWithPassword({ email: 'test@example.com', password: '123456' })
+          .catch(() => supabase.auth.signUp({ email: 'test@example.com', password: '123456' }));
       }
-
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
 
-      const { data } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
       setProjects(data || []);
       setLoading(false);
-    };
+    }
     init();
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      setConversations([]);
-      setSelectedConversationId(null);
-      return;
-    }
-
+    if (!selectedProjectId) { setConversations([]); setSelectedConversationId(null); return; }
     supabase
       .from('conversations')
       .select('*')
@@ -100,18 +62,12 @@ export default function App() {
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setConversations(data || []);
-        if (data?.length && !selectedConversationId) {
-          setSelectedConversationId(data[0].id);
-        }
+        if (data?.length && !selectedConversationId) setSelectedConversationId(data[0].id);
       });
   }, [selectedProjectId]);
 
   useEffect(() => {
-    if (!selectedConversationId) {
-      setMessages([]);
-      return;
-    }
-
+    if (!selectedConversationId) { setMessages([]); return; }
     supabase
       .from('messages')
       .select('*')
@@ -120,75 +76,38 @@ export default function App() {
       .then(({ data }) => setMessages(data || []));
   }, [selectedConversationId]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const createProject = async () => {
     const title = prompt('Project name:', 'New AI Project') || 'New Project';
     if (!title) return;
-
-    const { data } = await supabase
-      .from('projects')
-      .insert({ title, user_id: user?.id })
-      .select()
-      .single();
-
-    if (data) {
-      setProjects(p => [data, ...p]);
-      setSelectedProjectId(data.id);
-    }
+    const { data } = await supabase.from('projects').insert({ title, user_id: user?.id }).select().single();
+    if (data) { setProjects(p => [data, ...p]); setSelectedProjectId(data.id); }
   };
 
   const createConversation = async () => {
     if (!selectedProjectId) return;
-
-    const { data } = await supabase
-      .from('conversations')
-      .insert({ project_id: selectedProjectId, title: 'New Chat' })
-      .select()
-      .single();
-
-    if (data) {
-      setConversations(c => [data, ...c]);
-      setSelectedConversationId(data.id);
-      setMessages([]);
-    }
+    const { data } = await supabase.from('conversations').insert({ project_id: selectedProjectId, title: 'New Chat' }).select().single();
+    if (data) { setConversations(c => [data, ...c]); setSelectedConversationId(data.id); setMessages([]); }
   };
 
   const sendMessage = async () => {
     if (!input.trim() || !selectedConversationId || isTyping) return;
-
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      conversation_id: selectedConversationId,
-      role: 'user',
-      content: input,
-      created_at: new Date().toISOString(),
-    };
-
+    const userMsg: Message = { id: crypto.randomUUID(), conversation_id: selectedConversationId, role: 'user', content: input, created_at: new Date().toISOString() };
     setMessages(m => [...m, userMsg]);
     const text = input;
     setInput('');
     setIsTyping(true);
 
-    await supabase.from('messages').insert({
-      conversation_id: selectedConversationId,
-      role: 'user',
-      content: text,
-    });
+    await supabase.from('messages').insert({ conversation_id: selectedConversationId, role: 'user', content: text });
 
     try {
-      const settings = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
-      const apiKey = settings.xaiApiKey;
-      if (!apiKey) throw new Error('No API key in Settings');
+      const { xaiApiKey } = JSON.parse(localStorage.getItem('xai-coder-settings') || '{}');
+      if (!xaiApiKey) throw new Error('Set your API key in Settings');
 
       const res = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${xaiApiKey}` },
         body: JSON.stringify({
           model: currentModel === 'auto' ? 'grok-2-latest' : currentModel,
           messages: [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }],
@@ -198,119 +117,62 @@ export default function App() {
       });
 
       if (!res.ok) throw new Error(`API error ${res.status}`);
+      const { choices } = await res.json();
+      const reply = choices?.[0]?.message?.content || 'No response';
 
-      const json = await res.json();
-      const assistantContent = json.choices?.[0]?.message?.content || 'No response';
-
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        conversation_id: selectedConversationId,
-        role: 'assistant',
-        content: assistantContent,
-        created_at: new Date().toISOString(),
-      };
-
+      const assistantMsg: Message = { id: crypto.randomUUID(), conversation_id: selectedConversationId, role: 'assistant', content: reply, created_at: new Date().toISOString() };
       setMessages(m => [...m, assistantMsg]);
-
-      await supabase.from('messages').insert({
-        conversation_id: selectedConversationId,
-        role: 'assistant',
-        content: assistantContent,
-      });
+      await supabase.from('messages').insert({ conversation_id: selectedConversationId, role: 'assistant', content: reply });
     } catch (err: any) {
-      setMessages(m => [...m, {
-        id: crypto.randomUUID(),
-        conversation_id: selectedConversationId!,
-        role: 'assistant',
-        content: `Error: ${err.message}`,
-        created_at: new Date().toISOString(),
-      }]);
+      setMessages(m => [...m, { id: crypto.randomUUID(), conversation_id: selectedConversationId!, role: 'assistant', content: `Error: ${err.message}`, created_at: new Date().toISOString() }]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-900 to-purple-900">
-        <Loader2 className="w-16 h-16 animate-spin text-white" />
-      </div>
-    );
-  }
+  if (loading) return <div className="h-screen flex-center bg-gradient-to-br from-indigo-900 to-purple-900"><Loader2 className="w-16 h-16 animate-spin text-white" /></div>;
 
   if (showSettings) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-        <Navigation
-          userName={user?.email?.split('@')[0] || 'Dev'}
-          onSettingsClick={() => setShowSettings(false)}
-          onLogout={() => supabase.auth.signOut()}
-        />
-        <div className="flex-1 overflow-y-auto p-8">
-          <SettingsPage onClose={() => setShowSettings(false)} />
-        </div>
+        <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(false)} onLogout={() => supabase.auth.signOut()} />
+        <div className="flex-1 overflow-y-auto p-8"><SettingsPage onClose={() => setShowSettings(false)} /></div>
       </div>
     );
   }
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
-      <Navigation
-        userName={user?.email?.split('@')[0] || 'Dev'}
-        onSettingsClick={() => setShowSettings(true)}
-        onLogout={() => supabase.auth.signOut()}
-      />
+      <Navigation userName={user?.email?.split('@')[0] || 'Dev'} onSettingsClick={() => setShowSettings(true)} onLogout={() => supabase.auth.signOut()} />
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
           <div className="p-4 border-b border-gray-700">
-            <button
-              onClick={createProject}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium transition"
-            >
+            <button onClick={createProject} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium transition">
               <Plus size={20} /> New Project
             </button>
           </div>
-
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {projects.map(p => (
               <div key={p.id}>
                 <div
                   onClick={() => setSelectedProjectId(selectedProjectId === p.id ? null : p.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all ${
-                    selectedProjectId === p.id
-                      ? 'bg-indigo-900 border border-indigo-600'
-                      : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
+                  className={`p-3 rounded-lg cursor-pointer transition-all ${selectedProjectId === p.id ? 'bg-indigo-900 border border-indigo-600' : 'bg-gray-700 hover:bg-gray-600'}`}
                 >
                   <h3 className="font-medium">{p.title}</h3>
                 </div>
-
                 {selectedProjectId === p.id && (
                   <div className="ml-4 mt-2 space-y-2">
                     {conversations.map(c => (
                       <div
                         key={c.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedConversationId(c.id);
-                        }}
-                        className={`px-4 py-2 rounded cursor-pointer text-sm ${
-                          selectedConversationId === c.id ? 'bg-indigo-800' : 'hover:bg-gray-600'
-                        }`}
+                        onClick={(e) => { e.stopPropagation(); setSelectedConversationId(c.id); }}
+                        className={`px-4 py-2 rounded cursor-pointer text-sm ${selectedConversationId === c.id ? 'bg-indigo-800' : 'hover:bg-gray-600'}`}
                       >
                         {c.title}
                       </div>
                     ))}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        createConversation();
-                      }}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 pl-4"
-                    >
-                      + New Chat
-                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); createConversation(); }} className="text-xs text-indigo-400 hover:text-indigo-300 pl-4">+ New Chat</button>
                   </div>
                 )}
               </div>
@@ -324,7 +186,6 @@ export default function App() {
               <div className="border-b border-gray-800 bg-gray-950 px-6 py-4">
                 <h1 className="text-2xl font-bold">{selectedConversation.title}</h1>
               </div>
-
               <div className="flex-1 flex flex-col">
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
                   {messages.length === 0 ? (
@@ -336,44 +197,26 @@ export default function App() {
                   ) : (
                     messages.map(msg => (
                       <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div
-                          className={`max-w-4xl rounded-2xl px-8 py-5 ${
-                            msg.role === 'user'
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-800 text-gray-100 border border-gray-700'
-                          }`}
-                        >
+                        <div className={`max-w-4xl rounded-2xl px-8 py-5 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-100 border border-gray-700'}`}>
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{
                               code({ inline, className, children }) {
                                 const match = /language-(\w+)/.exec(className || '');
-                                const codeString = String(children).replace(/\n$/, '');
-                                if (inline) {
-                                  return <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>;
-                                }
+                                const code = String(children).replace(/\n$/, '');
+                                if (inline) return <code className="px-2 py-1 bg-gray-700 rounded text-sm">{children}</code>;
                                 return (
                                   <div className="my-4 bg-gray-900 rounded-xl border border-gray-700 overflow-hidden">
-                                    <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                                    <div className="flex justify-between items-center px-4 py-2 bg-gray-800 border-b border-gray-700">
                                       <span className="text-xs text-gray-400">{match?.[1]?.toUpperCase() || 'CODE'}</span>
-                                      <button
-                                        onClick={() => navigator.clipboard.writeText(codeString)}
-                                        className="p-1 hover:bg-gray-700 rounded"
-                                      >
-                                        <Copy size={14} className="text-gray-400" />
-                                      </button>
+                                      <button onClick={() => navigator.clipboard.writeText(code)} className="p-1 hover:bg-gray-700 rounded"><Copy size={14} className="text-gray-400" /></button>
                                     </div>
-                                    <SyntaxHighlighter
-                                      style={vscDarkPlus}
-                                      language={match?.[1] || 'text'}
-                                      PreTag="div"
-                                      customStyle={{ margin: 0, padding: '16px', background: 'transparent' }}
-                                    >
-                                      {codeString}
+                                    <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div" customStyle={{ margin: 0, padding: '16px', background: 'transparent' }}>
+                                      {code}
                                     </SyntaxHighlighter>
                                   </div>
                                 );
-                              },
+                              }
                             }}
                           >
                             {msg.content}
@@ -382,19 +225,17 @@ export default function App() {
                       </div>
                     ))
                   )}
-
                   {isTyping && (
                     <div className="flex justify-start">
                       <div className="bg-gray-800 rounded-2xl px-8 py-5">
                         <div className="flex gap-2">
                           <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:0.1s]" />
+                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:0.2s]" />
                         </div>
                       </div>
                     </div>
                   )}
-
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -403,15 +244,15 @@ export default function App() {
                     <input
                       type="text"
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                       placeholder="Ask Grok..."
-                      className="flex-1 px-6 py-4 bg-gray-800 border border-gray-700 rounded-2xl focus:outline-none focus:border-indigo-500 transition text-white placeholder-gray-500 text-lg"
+                      className="flex-1 px-6 py-4 bg-gray-800 border border-gray-700 rounded-2xl focus:outline-none focus:border-indigo-500 text-white placeholder-gray-500 text-lg"
                     />
                     <button
                       onClick={sendMessage}
                       disabled={isTyping || !input.trim()}
-                      className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 rounded-2xl transition flex items-center gap-2 font-medium text-lg disabled:cursor-not-allowed"
+                      className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 rounded-2xl flex items-center gap-2 font-medium text-lg disabled:cursor-not-allowed"
                     >
                       <Send size={22} />
                     </button>
@@ -422,7 +263,7 @@ export default function App() {
           ) : (
             <div className="flex-1 flex items-center justify-center text-center">
               <div>
-                <div className="bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl w-32 h-32 mb-8" />
+                <div className="w-32 h-32 mx-auto mb-8 bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl" />
                 <h1 className="text-5xl font-bold mb-4">xAI Coder</h1>
                 <p className="text-xl text-gray-400">Create a project to start chatting with Grok</p>
               </div>
