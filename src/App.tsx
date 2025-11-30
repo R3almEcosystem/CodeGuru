@@ -1,9 +1,9 @@
 // src/App.tsx
 import React, { useState, useEffect } from 'react';
-import { Loader2, MessageSquare } from 'lucide-react';
+import { Loader2, MessageSquare, LogIn } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Navigation } from './components/Navigation';           // ← NEW: Our pro nav
+import { Navigation } from './components/Navigation';
 import { SettingsPage } from './components/SettingsPage';
 import { HierarchicalSidebar } from './components/HierarchicalSidebar';
 import { useSettings } from './hooks/useSettings';
@@ -14,8 +14,12 @@ export function App() {
   const location = useLocation();
   const { settings, isLoading: settingsLoading } = useSettings();
 
-  // User & State
-  const [userName] = useState('Developer');
+  // Auth state
+  const [user, setUser] = useState<any>(null);
+  const [userName, setUserName] = useState('Developer');
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // App state
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentProjectName, setCurrentProjectName] = useState('Untitled Project');
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
@@ -24,26 +28,44 @@ export function App() {
   const [globalLoading, setGlobalLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Determine active view for navigation highlighting
-  const currentView = location.pathname.startsWith('/chat/')
-    ? 'chat'
-    : location.pathname === '/settings'
-    ? 'settings'
-    : 'home';
-
-  // Load initial data
+  // Listen to auth changes
   useEffect(() => {
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setUserName(session?.user?.email?.split('@')[0] || 'Developer');
+      setIsAuthLoading(false);
+    });
+
+    // Listen for changes (login, logout, etc.)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setUserName(session?.user?.email?.split('@')[0] || 'Developer');
+      setIsAuthLoading(false);
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Load data only when authenticated
+  useEffect(() => {
+    if (!user || isAuthLoading) return;
+
     const loadData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          navigate('/login');
-          return;
-        }
-
         const [projRes, convRes] = await Promise.all([
-          supabase.from('projects').select('*').order('updated_at', { ascending: false }),
-          supabase.from('conversations').select('*').order('updated_at', { ascending: false })
+          supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('updated_at', { ascending: false }),
+          supabase
+            .from('conversations')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('updated_at', { ascending: false })
         ]);
 
         setProjects(projRes.data || []);
@@ -62,59 +84,22 @@ export function App() {
     };
 
     loadData();
-  }, [navigate]);
+  }, [user, isAuthLoading, currentProjectId]);
 
-  // Handlers
-  const handleSelectProject = (id: string) => {
-    const project = projects.find(p => p.id === id);
-    if (project) {
-      setCurrentProjectId(id);
-      setCurrentProjectName(project.title);
-      setCurrentConvId(null);
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthLoading && !user) {
+      navigate('/login');
     }
-  };
+  }, [user, isAuthLoading, navigate]);
 
-  const handleSelectConversation = (id: string) => {
-    setCurrentConvId(id);
-    navigate(`/chat/${id}`);
-  };
-
-  const handleCreateProject = async () => {
-    const title = prompt('Project name:', 'New Project') || 'New Project';
-    const { data } = await supabase
-      .from('projects')
-      .insert({ title })
-      .select()
-      .single();
-
-    if (data) {
-      setProjects(p => [data, ...p]);
-      handleSelectProject(data.id);
-    }
-  };
-
-  const handleCreateConversation = async () => {
-    if (!currentProjectId) return;
-
-    const { data } = await supabase
-      .from('conversations')
-      .insert({ title: 'New Chat', project_id: currentProjectId })
-      .select()
-      .single();
-
-    if (data) {
-      setConversations(c => [data, ...c]);
-      handleSelectConversation(data.id);
-    }
-  };
-
-  const handleLogout = () => {
-    supabase.auth.signOut();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/login');
   };
 
-  // Loading screen
-  if (globalLoading || settingsLoading) {
+  // Loading states
+  if (isAuthLoading || settingsLoading || globalLoading) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
@@ -125,9 +110,26 @@ export function App() {
     );
   }
 
+  // Not logged in (shouldn't happen due to redirect, but safe)
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <LogIn className="w-16 h-16 mx-auto mb-6 text-indigo-600" />
+          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
+          <button
+            onClick={() => navigate('/login')}
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      {/* NEW: Professional Top Navigation */}
       <Navigation
         logo={
           <div className="flex items-center gap-3">
@@ -150,17 +152,52 @@ export function App() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Projects & Conversations Sidebar */}
         <aside className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
           <HierarchicalSidebar
             currentProjectId={currentProjectId}
             currentConvId={currentConvId}
             projects={projects}
             conversations={conversations}
-            onSelectProject={handleSelectProject}
-            onSelectConv={handleSelectConversation}
-            onCreateNewProject={handleCreateProject}
-            onCreateNewConv={handleCreateConversation}
+            onSelectProject={(id) => {
+              const project = projects.find(p => p.id === id);
+              if (project) {
+                setCurrentProjectId(id);
+                setCurrentProjectName(project.title);
+                setCurrentConvId(null);
+              }
+            }}
+            onSelectConv={(id) => {
+              setCurrentConvId(id);
+              navigate(`/chat/${id}`);
+            }}
+            onCreateNewProject={async () => {
+              const title = prompt('Project name:', 'New Project') || 'New Project';
+              const { data } = await supabase
+                .from('projects')
+                .insert({ title, user_id: user.id })
+                .select()
+                .single();
+
+              if (data) {
+                setProjects(p => [data, ...p]);
+                setCurrentProjectId(data.id);
+                setCurrentProjectName(data.title);
+              }
+            }}
+            onCreateNewConv={async () => {
+              if (!currentProjectId) return;
+              const { data } = await supabase
+                .from('conversations')
+                .insert({ title: 'New Chat', project_id: currentProjectId, user_id: user.id })
+                .select()
+                .single();
+
+              if (data) {
+                setConversations(c => [data, ...c]);
+                setCurrentConvId(data.id);
+                navigate(`/chat/${data.id}`);
+              }
+            }}
             onDeleteConv={async (id) => {
               await supabase.from('conversations').delete().eq('id', id);
               setConversations(c => c.filter(x => x.id !== id));
@@ -182,7 +219,6 @@ export function App() {
           />
         </aside>
 
-        {/* Main Content Area */}
         <main className="flex-1 bg-white overflow-hidden">
           {showSettings ? (
             <div className="h-full flex flex-col">
@@ -192,7 +228,7 @@ export function App() {
                   onClick={() => setShowSettings(false)}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition text-sm font-medium"
                 >
-                  ← Back to App
+                  Back to App
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-8">
