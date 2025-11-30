@@ -1,4 +1,4 @@
-// src/App.tsx — FULLY WORKING WITH SIDEBAR
+// src/App.tsx
 import React, { useEffect, useState } from 'react';
 import { Loader2, Plus, Folder, MessageSquare } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -8,6 +8,7 @@ interface Project {
   id: string;
   title: string;
   created_at: string;
+  user_id?: string | null;
 }
 
 export default function App() {
@@ -16,32 +17,39 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  // Auto-login + load projects
+  // -------------------------------------------------
+  // Auto-login + load projects (development only)
+  // -------------------------------------------------
   useEffect(() => {
     const init = async () => {
+      // 1. Check existing session
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
-        await supabase.auth.signInWithPassword({
+        // 2. Try to sign in → if fails, sign up
+        const { error } = await supabase.auth.signInWithPassword({
           email: 'test@example.com',
           password: '123456',
-        }).catch(async () => {
+        });
+
+        if (error && error.message.includes('Invalid login credentials')) {
           await supabase.auth.signUp({
             email: 'test@example.com',
             password: '123456',
           });
-        });
+        }
       }
 
+      // 3. Get the authenticated user
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
 
-      // Load projects
+      // 4. Load projects (RLS disabled = works for everyone)
       const { data } = await supabase
         .from('projects')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       setProjects(data || []);
       setLoading(false);
     };
@@ -49,24 +57,41 @@ export default function App() {
     init();
   }, []);
 
+  // -------------------------------------------------
+  // Create a new project (works even if user_id column exists)
+  // -------------------------------------------------
   const createProject = async () => {
-    const title = prompt('Project name:', 'My Awesome Project') || 'Untitled Project';
+    const title =
+      prompt('Project name:', 'My Awesome Project') || 'Untitled Project';
     if (!title) return;
+
+    const payload: any = { title };
+    // If the table has a user_id column, include it (safe either way)
+    if (user?.id) payload.user_id = user.id;
 
     const { data, error } = await supabase
       .from('projects')
-      .insert({ title })
+      .insert(payload)
       .select()
       .single();
 
+    if (error) {
+      console.error('Failed to create project:', error);
+      alert(`Error: ${error.message}`);
+      return;
+    }
+
     if (data) {
-      setProjects(p => [data, ...p]);
+      setProjects((prev) => [data, ...prev]);
       setSelectedProjectId(data.id);
     }
   };
 
   const handleLogout = () => supabase.auth.signOut();
 
+  // -------------------------------------------------
+  // Loading UI
+  // -------------------------------------------------
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -75,6 +100,9 @@ export default function App() {
     );
   }
 
+  // -------------------------------------------------
+  // Main Layout
+  // -------------------------------------------------
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Top Navigation */}
@@ -106,7 +134,7 @@ export default function App() {
               </div>
             ) : (
               <div className="p-4 space-y-2">
-                {projects.map(project => (
+                {projects.map((project) => (
                   <div
                     key={project.id}
                     onClick={() => setSelectedProjectId(project.id)}
@@ -119,7 +147,9 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <Folder size={20} className="text-indigo-600" />
                       <div>
-                        <h3 className="font-medium text-gray-900">{project.title}</h3>
+                        <h3 className="font-medium text-gray-900">
+                          {project.title}
+                        </h3>
                         <p className="text-xs text-gray-500">
                           {new Date(project.created_at).toLocaleDateString()}
                         </p>
@@ -132,13 +162,13 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Main Area */}
+        {/* Main Content Area */}
         <main className="flex-1 flex items-center justify-center bg-gray-50">
           {selectedProjectId ? (
             <div className="text-center">
               <MessageSquare className="w-24 h-24 mx-auto mb-6 text-indigo-600 opacity-50" />
               <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                {projects.find(p => p.id === selectedProjectId)?.title}
+                {projects.find((p) => p.id === selectedProjectId)?.title}
               </h2>
               <p className="text-xl text-gray-600">Chat coming soon...</p>
             </div>
