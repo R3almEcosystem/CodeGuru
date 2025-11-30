@@ -1,8 +1,9 @@
-// src/App.tsx — FULL GROK CHAT + CODE TABS (FINAL)
+// src/App.tsx — FINAL VERSION WITH FULL SETTINGS INTEGRATION
 import React, { useEffect, useState, useRef } from 'react';
-import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Paperclip, Copy, Check } from 'lucide-react';
+import { Loader2, Plus, Folder, MessageSquare, Code2, Send, Copy, Check } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { Navigation } from './components/Navigation';
+import { SettingsPage } from './components/SettingsPage';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -34,6 +35,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
@@ -115,14 +117,12 @@ export default function App() {
     setInput('');
     setIsTyping(true);
 
-    // Save user message
     await supabase.from('messages').insert({
       project_id: selectedProjectId,
       role: 'user',
       content: input,
     });
 
-    // Call xAI API
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -160,6 +160,11 @@ export default function App() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
@@ -168,12 +173,28 @@ export default function App() {
     );
   }
 
+  // Settings Overlay
+  if (showSettings) {
+    return (
+      <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
+        <Navigation
+          userName={user?.email?.split('@')[0] || 'Dev'}
+          onSettingsClick={() => setShowSettings(false)}
+          onLogout={handleLogout}
+        />
+        <div className="flex-1 overflow-y-auto p-8">
+          <SettingsPage />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-gray-100">
       <Navigation
         userName={user?.email?.split('@')[0] || 'Dev'}
-        onLogout={() => supabase.auth.signOut()}
-        onSettingsClick={() => alert('Settings')}
+        onSettingsClick={() => setShowSettings(true)}
+        onLogout={handleLogout}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -253,21 +274,12 @@ export default function App() {
                       </div>
                     ) : (
                       messages.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-3xl rounded-2xl px-6 py-4 ${
-                              msg.role === 'user'
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-800 text-gray-100 border border-gray-700'
-                            }`}
-                          >
+                        <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-3xl rounded-2xl px-6 py-4 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-100 border border-gray-700'}`}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
-                                code({ node, inline, className, children, ...props }) {
+                                code({ inline, className, children, ...props }) {
                                   const match = /language-(\w+)/.exec(className || '');
                                   const codeString = String(children).replace(/\n$/, '');
                                   return !inline ? (
@@ -278,12 +290,7 @@ export default function App() {
                                       >
                                         {copiedId === msg.id ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
                                       </button>
-                                      <SyntaxHighlighter
-                                        style={vscDarkPlus}
-                                        language={match?.[1] || 'text'}
-                                        PreTag="div"
-                                        className="rounded-lg !mt-0"
-                                      >
+                                      <SyntaxHighlighter style={vscDarkPlus} language={match?.[1] || 'text'} PreTag="div">
                                         {codeString}
                                       </SyntaxHighlighter>
                                     </div>
@@ -305,7 +312,7 @@ export default function App() {
                       <div className="flex justify-start">
                         <div className="bg-gray-800 rounded-2xl px-6 py-4">
                           <div className="flex gap-2">
-                            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                             <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                             <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                           </div>
@@ -315,7 +322,6 @@ export default function App() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Input */}
                   <div className="border-t border-gray-800 p-6 bg-gray-950">
                     <div className="flex gap-3 max-w-5xl mx-auto">
                       <input
