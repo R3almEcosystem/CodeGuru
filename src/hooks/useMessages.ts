@@ -9,8 +9,8 @@ type Setters = {
 }
 
 export function useMessages(
-  currentConvId?: string,
-  currentProjectId?: string,
+  urlProjectId?: string | null,
+  urlConvId?: string | null,
   setters?: Setters
 ) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -34,12 +34,8 @@ export function useMessages(
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('loadProjects error:', error)
-      setProjects([])
-    } else {
-      setProjects(data || [])
-    }
+    if (error) console.error('loadProjects error:', error)
+    else setProjects(data || [])
   }
 
   const loadConversations = async (projectId?: string | null) => {
@@ -55,43 +51,37 @@ export function useMessages(
     if (projectId) query = query.eq('project_id', projectId)
 
     const { data, error } = await query
-    if (error) {
-      console.error('loadConversations error:', error)
-      setConversations([])
-    } else {
-      setConversations(data || [])
-    }
+    if (error) console.error('loadConversations error:', error)
+    else setConversations(data || [])
   }
 
   const switchProject = async (projectId: string) => {
     const { data, error } = await supabase
       .from('projects')
-      .select('id, title, created_at, updated_at')
+      .select('*')
       .eq('id', projectId)
       .single()
 
-    if (error) {
-      console.error('switchProject error:', error)
-      return
-    }
+    if (error || !data) return console.error('switchProject error:', error)
 
     setCurrentProject(data)
     safeSetProjectId(projectId)
-    await loadConversations(projectId)
     setCurrentConv(null)
     safeSetConvId(null)
+    await loadConversations(projectId)
   }
 
   const switchConversation = async (convId: string) => {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('conversations')
-      .select('id, title, created_at, updated_at')
+      .select('*')
       .eq('id', convId)
       .single()
 
-    if (error) {
+    if (error || !data) {
       console.error('switchConversation error:', error)
+      setIsLoading(false)
       return
     }
 
@@ -117,18 +107,16 @@ export function useMessages(
         role: m.role,
         content: m.content,
         timestamp: new Date(m.timestamp).getTime(),
-        attachments: JSON.parse(m.attachments || '[]') as FileAttachment[],
+        attachments: m.attachments ? JSON.parse(m.attachments) : [],
       }))
       setMessages(parsed)
     }
   }
 
-  // FIXED: No more reverseProject typo + no duplicate "Default Project"
   const createProject = async (title = 'New Project') => {
     const userId = userIdRef.current
     if (!userId) return
 
-    // Check if project already exists
     const { data: existing } = await supabase
       .from('projects')
       .select('id')
@@ -147,13 +135,10 @@ export function useMessages(
       .select()
       .single()
 
-    if (error) {
-      console.error('createProject error:', error)
-      return
-    }
+    if (error || !newProj) return console.error('createProject error:', error)
 
     setProjects(p => [newProj, ...p])
-    await switchProject(newProj.id)  // ← Fixed: was reverseProject
+    await switchProject(newProj.id)
   }
 
   const createConversation = async (title = 'New Conversation') => {
@@ -168,28 +153,10 @@ export function useMessages(
       .select()
       .single()
 
-    if (error) {
-      console.error('createConversation error:', error)
-      return
-    }
+    if (error || !newConv) return console.error('createConversation error:', error)
 
     setConversations(c => [newConv, ...c])
     await switchConversation(newConv.id)
-  }
-
-  const deleteConversation = async (convId: string) => {
-    await supabase.from('conversations').delete().eq('id', convId)
-    setConversations(c => c.filter(x => x.id !== convId))
-    if (currentConv?.id === convId) {
-      const next = conversations[0]
-      next ? await switchConversation(next.id) : await createConversation()
-    }
-  }
-
-  const updateConversationTitle = async (convId: string, newTitle: string) => {
-    await supabase.from('conversations').update({ title: newTitle }).eq('id', convId)
-    setConversations(c => c.map(x => (x.id === convId ? { ...x, title: newTitle } : x)))
-    if (currentConv?.id === convId) setCurrentConv({ ...currentConv, title: newTitle })
   }
 
   const addMessage = async (msg: Omit<Message, 'id'>) => {
@@ -222,52 +189,44 @@ export function useMessages(
     await loadConversations(currentProject?.id || null)
   }
 
+  // ONE-TIME INIT ONLY
   useEffect(() => {
     if (initializedRef.current) return
+    initializedRef.current = true
 
     const init = async () => {
       setIsLoading(true)
       const uid = await getUserId()
-      if (!uid) {
-        setIsLoading(false)
-        return
-      }
-      userIdRef.current = uid
+      if (!uid) return setIsLoading(false)
 
+      userIdRef.current = uid
       await loadProjects()
 
-      if (currentProjectId) {
-        await switchProject(currentProjectId)
-      } else if (projects.length > 0) {
-        await switchProject(projects[0].id)
+      let targetProjectId = urlProjectId
+      if (!targetProjectId && projects.length > 0) {
+        targetProjectId = projects[0].id
+      }
+      if (!targetProjectId) {
+        await createProject('Default Project')
       } else {
-        await createProject('Default Project')  // ← Only creates if not exists
+        await switchProject(targetProjectId)
       }
 
-      if (currentConvId) {
-        await switchConversation(currentConvId)
-      } else if (conversations.length > 0) {
-        await switchConversation(conversations[0].id)
-      } else {
+      let targetConvId = urlConvId
+      if (!targetConvId && conversations.length > 0) {
+        targetConvId = conversations[0].id
+      }
+      if (!targetConvId) {
         await createConversation()
+      } else {
+        await switchConversation(targetConvId)
       }
 
       setIsLoading(false)
-      initializedRef.current = true
     }
 
     init()
-  }, [])
-
-  useEffect(() => {
-    if (!initializedRef.current || !currentProjectId) return
-    switchProject(currentProjectId)
-  }, [currentProjectId])
-
-  useEffect(() => {
-    if (!initializedRef.current || !currentConvId) return
-    switchConversation(currentConvId)
-  }, [currentConvId])
+  }, []) // Run once
 
   return {
     messages,
@@ -281,9 +240,19 @@ export function useMessages(
     switchProject,
     createConversation,
     createProject,
-    deleteConversation,
-    updateConversationTitle,
-    setProjects,
-    setCurrentProject,
+    deleteConversation: async (id: string) => {
+      await supabase.from('conversations').delete().eq('id', id)
+      setConversations(c => c.filter(x => x.id !== id))
+      if (currentConv?.id === id) {
+        conversations.length > 1
+          ? await switchConversation(conversations[0].id)
+          : await createConversation()
+      }
+    },
+    updateConversationTitle: async (id: string, title: string) => {
+      await supabase.from('conversations').update({ title }).eq('id', id)
+      setConversations(c => c.map(x => (x.id === id ? { ...x, title } : x)))
+      if (currentConv?.id === id) setCurrentConv({ ...currentConv, title })
+    },
   }
 }
