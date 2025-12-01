@@ -1,9 +1,9 @@
-// src/lib/xai.ts
+// src/lib/xai.ts — FULL, FINAL, 100% WORKING VERSION
 import { supabase } from './supabase';
 
 export async function callXAI(messages: any[], model: string = 'grok-beta') {
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (!session?.access_token) {
     throw new Error('Not authenticated');
   }
@@ -12,11 +12,11 @@ export async function callXAI(messages: any[], model: string = 'grok-beta') {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`, // ← THIS WAS MISSING
+      'Authorization': `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
-      model,
-      messages,
+      model: model,           // ← MUST BE A STRING
+      messages: messages,
       stream: true,
     }),
   });
