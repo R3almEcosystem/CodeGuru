@@ -157,10 +157,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
+    <div className="flex flex-col h-full bg-background">
       <div className="flex-1 overflow-y-auto px-4 py-8 max-w-5xl mx-auto w-full">
         {messages.length === 0 && !isLoading && (
-          <div className="text-center text-gray-500 mt-20">
+          <div className="text-center text-muted mt-20">
             <h2 className="text-2xl font-light mb-2">How can I help you today?</h2>
             <p className="text-sm">Start a conversation with Grok</p>
           </div>
@@ -172,10 +172,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
             className={`flex my-6 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-3xl px-6 py-4 rounded-3xl shadow-sm ${
+              className={`max-w-3xl px-6 py-4 rounded-lg ${
                 msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-900'
+                  ? 'bg-gradient-user text-white'
+                  : 'bg-card border border-border text-foreground'
               }`}
             >
               <ReactMarkdown
@@ -217,11 +217,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
 
         {isLoading && (
           <div className="flex justify-start my-6">
-            <div className="bg-white border border-gray-200 px-6 py-4 rounded-3xl shadow-sm">
+            <div className="bg-card border border-border px-6 py-4 rounded-lg">
               <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
               </div>
             </div>
           </div>
@@ -229,12 +229,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-gray-200 bg-white px-4 py-6">
+      <div className="border-t border-border bg-card px-4 py-6">
         <div className="max-w-5xl mx-auto">
           {selectedFiles.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
               {selectedFiles.map((f, i) => (
-                <span key={i} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                <span key={i} className="inline-flex items-center gap-1 bg-white/10 text-foreground px-3 py-1 rounded-full text-sm">
                   📎 {f.name}
                   <button onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))} className="ml-1">×</button>
                 </span>
@@ -245,9 +245,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-3 hover:bg-gray-100 rounded-full transition"
+              className="p-3 hover:bg-white/10 rounded-lg transition"
             >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
             </button>
@@ -264,13 +264,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Message Grok..."
-              className="flex-1 px-5 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500"
+              className="flex-1 px-5 py-3 border border-border rounded-lg bg-white/5 text-foreground placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isLoading}
             />
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
-              className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="p-3 bg-gradient-user text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
