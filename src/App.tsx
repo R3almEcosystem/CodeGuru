@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2 }」で from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import NavigationMenu from './components/NavigationMenu';
@@ -24,13 +24,11 @@ export default function App() {
     createProject,
   } = useMessages();
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle sending a new message
-  const handleSend = async (content: string, attachments?: any[]) => {
+  const handleSend = async (content: string, files?: File[]) => {
     if (!content.trim() || !currentConv || isLoading) return;
 
     const userMessage = {
@@ -38,32 +36,36 @@ export default function App() {
       role: 'user' as const,
       content: content.trim(),
       conversation_id: currentConv.id,
-      created_at: new Date().toISOString(),
       timestamp: Date.now(),
-      attachments: attachments || [],
+      attachments: files?.map(f => ({
+        id: crypto.randomUUID(),
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        url: URL.createObjectURL(f),
+      })) || [],
     };
 
     await addMessage(userMessage);
   };
 
-  // Global loading state
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      <div className="flex h-screen items-center justify-center bg-[#0f0f10]">
+        <Loader2 className="w-12 h-12 animate-spin text-white" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* 1. Permanent Left Navigation — Fixed 64px */}
-      <div className="w-16 flex-shrink-0 bg-sidebar border-r border-border">
+    <div className="flex h-screen bg-[#0f0f10] text-white overflow-hidden">
+      {/* 1. Left Navigation - Fixed 64px */}
+      <div className="w-16 flex-shrink-0 bg-black border-r border-white/10">
         <NavigationMenu />
       </div>
 
-      {/* 2. Projects & Conversations Sidebar — Fixed 320px */}
-      <div className="w-80 flex-shrink-0 border-r border-border bg-muted/30 overflow-y-auto">
+      {/* 2. Sidebar - Projects & Chats */}
+      <div className="w-80 flex-shrink-0 bg-[#1a1a1a] border-r border-white/10 overflow-y-auto">
         <HierarchicalSidebar
           projects={projects}
           conversations={conversations}
@@ -76,40 +78,38 @@ export default function App() {
         />
       </div>
 
-      {/* 3. Main Chat Area — Takes all remaining space */}
+      {/* 3. Main Chat Area */}
       <div className="flex-1 flex flex-col">
+       oidosis
 
-        {/* Header — Matches Grok.new exactly */}
-        <header className="border-b border-border bg-card px-8 py-5 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-foreground">
-            {currentConv?.title || 'New Chat'}
-          </h1>
-          {currentProject && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Project: {currentProject.title}
-            </p>
-          )}
+        {/* Header */}
+        <header className="h-16 flex items-center px-8 border-b border-white/10 bg-[#0f0f10]/80 backdrop-blur">
+          <div>
+            <h1 className="text-xl font-semibold">
+              {currentConv?.title || 'New Chat'}
+            </h1>
+            {currentProject && (
+              <p className="text-sm text-gray-400">
+                {currentProject.title}
+              </p>
+            )}
+          </div>
         </header>
 
-        {/* Messages Area */}
-        <main className="flex-1 overflow-y-auto bg-background">
+        {/* Messages */}
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-[#0f0f10] via-[#0f0f10] to-[#1a1a1a]/20">
           {messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-8">
-              <div className="text-center max-w-2xl">
-                {/* Grok Logo Circle — Exact match */}
-                <div className="w-32 h-32 mx-auto mb-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-2xl">
-                  <span className="text-6xl font-bold text-white">G</span>
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-32 h-32 mx-auto mb-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-2xl ring-4 ring-white/20">
+                  <span className="text-6xl font-black">G</span>
                 </div>
-                <h2 className="text-3xl font-bold text-foreground mb-3">
-                  Welcome to Grok
-                </h2>
-                <p className="text-lg text-muted-foreground leading-relaxed">
-                  Start a conversation. Attach files, folders, or just ask anything.
-                </p>
+                <h2 className="text-4xl font-bold mb-4">How can I help you today?</h2>
+                <p className="text-gray-400 text-lg">Ask anything. Attach files. Build something amazing.</p>
               </div>
             </div>
           ) : (
-            <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+            <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
               {messages.map((msg) => (
                 <ChatMessage key={msg.id || msg.timestamp} message={msg} />
               ))}
@@ -118,14 +118,10 @@ export default function App() {
           )}
         </main>
 
-        {/* Input Footer — Pinned to bottom */}
-        <footer className="border-t border-border bg-card">
-          <div className="max-w-5xl mx-auto p-6">
-            <ChatInput
-              onSend={handleSend}
-              disabled={!currentConv || isLoading}
-              placeholder="Message Grok..."
-            />
+        {/* Input */}
+        <footer className="border-t border-white/10 bg-[#0f0f10]/80 backdrop-blur">
+          <div className="max-w-4xl mx-auto p-6">
+            <ChatInput onSend={handleSend} disabled={!currentConv} />
           </div>
         </footer>
       </div>
