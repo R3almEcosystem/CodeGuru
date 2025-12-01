@@ -6,14 +6,18 @@ import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check, Download, FileText, Image, FileCode, File } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { StreamingMessage } from '@/types';
+
+// Inline cn utility — replaces "@/lib/utils" entirely
+const cn = (...inputs: (string | undefined | null | false)[]) => {
+  return inputs.filter(Boolean).join(' ');
+};
 
 interface ChatMessageProps {
   message: StreamingMessage;
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+const ChatMessage = ({ message }: ChatMessageProps) => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const isUser = message.role === 'user';
   const hasContent = message.content.trim().length > 0;
@@ -186,4 +190,6 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       </div>
     </div>
   );
-}
+};
+
+export default ChatMessage;
