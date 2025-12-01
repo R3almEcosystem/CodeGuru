@@ -16,7 +16,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const { apiKey, baseUrl, model, logoUrl } = useSettings();
 
-  // useMessages will handle all project/conversation logic
   const {
     messages,
     currentConv,
@@ -30,23 +29,22 @@ function App() {
     switchProject,
     switchConversation,
     deleteConversation,
+    deleteProject,
     updateConversationTitle,
+    updateProjectTitle,
   } = useMessages();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Handle initial loading
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 300);
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Show loading screen
   if (isLoading || isMessagesLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50">
@@ -86,7 +84,6 @@ function App() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
         <HierarchicalSidebar
           currentProjectId={currentProject?.id || null}
           currentConvId={currentConv?.id || null}
@@ -97,18 +94,17 @@ function App() {
           onCreateNewProject={createProject}
           onCreateNewConv={createConversation}
           onDeleteConv={deleteConversation}
+          onDeleteProject={deleteProject}
           onUpdateTitle={(id, title, isProject) => {
             if (isProject) {
-              // Update project title
+              updateProjectTitle(id, title);
             } else {
               updateConversationTitle(id, title);
             }
           }}
         />
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col">
-          {/* Conversation List */}
           {currentProject && (
             <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
               <h2 className="font-semibold text-gray-800">
@@ -124,7 +120,6 @@ function App() {
             </div>
           )}
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {messages.length === 0 ? (
               <div className="h-full flex items-center justify-center">
@@ -146,7 +141,6 @@ function App() {
             )}
           </div>
 
-          {/* Input */}
           <ChatInput
             onSend={handleSend}
             disabled={!apiKey || !currentConv}

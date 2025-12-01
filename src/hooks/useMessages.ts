@@ -50,7 +50,7 @@ export function useMessages(
 
     let query = supabase
       .from('conversations')
-      .select('id, title, created_at, updated_at')
+      .select('id, title, created_at, updated_at, project_id')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false });
 
@@ -135,8 +135,9 @@ export function useMessages(
       setCurrentProject(project);
       safeSetProjectId(projectId);
       await loadConversations(projectId);
-      if (conversations.length > 0) {
-        await switchConversation(conversations[0].id);
+      const projectConvs = conversations.filter(c => c.project_id === projectId);
+      if (projectConvs.length > 0) {
+        await switchConversation(projectConvs[0].id);
       } else {
         await createConversation(projectId);
       }
@@ -177,7 +178,6 @@ export function useMessages(
         setMessages(prev => prev.map(m => m.timestamp === message.timestamp ? { ...m, id: data.id } : m));
       }
 
-      // If user message, trigger Grok stream
       if (message.role === 'user') {
         await streamGrokResponse();
       }
@@ -241,7 +241,6 @@ export function useMessages(
         }
       }
 
-      // Complete and save
       setMessages(prev =>
         prev.map(m =>
           m.timestamp === assistantMsg.timestamp ? { ...m, streaming: false, isComplete: true } : m
@@ -255,7 +254,6 @@ export function useMessages(
         timestamp: assistantMsg.timestamp,
       });
 
-      // Auto-update title if first assistant message
       if (messages.length === 1) {
         const title = content.slice(0, 50).trim() + (content.length > 50 ? '...' : '');
         await supabase.from('conversations').update({ title }).eq('id', currentConv.id);
@@ -264,14 +262,66 @@ export function useMessages(
       }
     } catch (err) {
       console.error('Stream error:', err);
-      setMessages(prev => prev.slice(0, -1)); // Remove failed msg
+      setMessages(prev => prev.slice(0, -1));
     }
   };
 
-  // Auto-scroll (add in App.tsx useEffect)
-  // ...
+  const deleteConversation = async (id: string) => {
+    await supabase.from('messages').delete().eq('conversation_id', id);
+    await supabase.from('conversations').delete().eq('id', id);
+    setConversations(prev => prev.filter(c => c.id !== id));
 
-  // ONE-TIME INIT ONLY
+    if (currentConv?.id === id) {
+      const remaining = conversations.filter(c => c.id !== id);
+      if (remaining.length > 0) {
+        await switchConversation(remaining[0].id);
+      } else {
+        await createConversation(currentProject?.id);
+      }
+    }
+  };
+
+  const deleteProject = async (projectId: string) => {
+    // Get all conversation IDs in this project
+    const convsInProject = conversations.filter(c => c.project_id === projectId);
+    const convIds = convsInProject.map(c => c.id);
+
+    // Delete all messages in those conversations
+    if (convIds.length > 0) {
+      await supabase.from('messages').delete().in('conversation_id', convIds);
+      await supabase.from('conversations').delete().in('id', convIds);
+    }
+
+    // Delete the project
+    await supabase.from('projects').delete().eq('id', projectId);
+
+    // Update state
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    setConversations(prev => prev.filter(c => c.project_id !== projectId));
+
+    // If deleted project was current → switch to another or create new
+    if (currentProject?.id === projectId) {
+      const remainingProjects = projects.filter(p => p.id !== projectId);
+      if (remainingProjects.length > 0) {
+        await switchProject(remainingProjects[0].id);
+      } else {
+        await createProject('New Project');
+      }
+    }
+  };
+
+  const updateConversationTitle = async (id: string, title: string) => {
+    await supabase.from('conversations').update({ title }).eq('id', id);
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c));
+    if (currentConv?.id === id) setCurrentConv({ ...currentConv, title });
+  };
+
+  const updateProjectTitle = async (id: string, title: string) => {
+    await supabase.from('projects').update({ title }).eq('id', id);
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, title } : p));
+    if (currentProject?.id === id) setCurrentProject({ ...currentProject, title });
+  };
+
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -283,23 +333,19 @@ export function useMessages(
 
       userIdRef.current = uid;
       await loadProjects();
+      await loadConversations();
 
-      let targetProjectId = urlProjectId;
-      if (!targetProjectId && projects.length > 0) {
-        targetProjectId = projects[0].id;
-      }
+      let targetProjectId = urlProjectId || projects[0]?.id;
       if (!targetProjectId) {
         await createProject('Default Project');
-      } else {
-        await switchProject(targetProjectId);
+        return;
       }
 
-      let targetConvId = urlConvId;
-      if (!targetConvId && conversations.length > 0) {
-        targetConvId = conversations[0].id;
-      }
+      await switchProject(targetProjectId);
+
+      let targetConvId = urlConvId || conversations.find(c => c.project_id === targetProjectId)?.id;
       if (!targetConvId) {
-        await createConversation();
+        await createConversation(targetProjectId);
       } else {
         await switchConversation(targetConvId);
       }
@@ -322,19 +368,9 @@ export function useMessages(
     switchProject,
     createConversation,
     createProject,
-    deleteConversation: async (id: string) => {
-      await supabase.from('conversations').delete().eq('id', id);
-      setConversations(c => c.filter(x => x.id !== id));
-      if (currentConv?.id === id) {
-        conversations.length > 1
-          ? await switchConversation(conversations[0].id)
-          : await createConversation();
-      }
-    },
-    updateConversationTitle: async (id: string, title: string) => {
-      await supabase.from('conversations').update({ title }).eq('id', id);
-      setConversations(c => c.map(x => (x.id === id ? { ...x, title } : x)));
-      if (currentConv?.id === id) setCurrentConv({ ...currentConv, title });
-    },
+    deleteConversation,
+    deleteProject,
+    updateConversationTitle,
+    updateProjectTitle,
   };
 }
