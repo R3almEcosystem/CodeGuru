@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect, useRef } from 'react';
-import { Loader2 }」で from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import NavigationMenu from './components/NavigationMenu';
@@ -58,14 +58,14 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#0f0f10] text-white overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* 1. Left Navigation - Fixed 64px */}
-      <div className="w-16 flex-shrink-0 bg-black border-r border-white/10">
+      <div className="w-16 flex-shrink-0 bg-card border-r border-border">
         <NavigationMenu />
       </div>
 
       {/* 2. Sidebar - Projects & Chats */}
-      <div className="w-80 flex-shrink-0 bg-[#1a1a1a] border-r border-white/10 overflow-y-auto">
+      <div className="w-80 flex-shrink-0 bg-background border-r border-border overflow-y-auto">
         <HierarchicalSidebar
           projects={projects}
           conversations={conversations}
@@ -80,10 +80,9 @@ export default function App() {
 
       {/* 3. Main Chat Area */}
       <div className="flex-1 flex flex-col">
-       oidosis
 
         {/* Header */}
-        <header className="h-16 flex items-center px-8 border-b border-white/10 bg-[#0f0f10]/80 backdrop-blur">
+        <header className="h-16 flex items-center px-8 border-b border-border bg-backdrop">
           <div>
             <h1 className="text-xl font-semibold">
               {currentConv?.title || 'New Chat'}
@@ -97,19 +96,19 @@ export default function App() {
         </header>
 
         {/* Messages */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-[#0f0f10] via-[#0f0f10] to-[#1a1a1a]/20">
+        <main className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-32 h-32 mx-auto mb-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-2xl ring-4 ring-white/20">
-                  <span className="text-6xl font-black">G</span>
+              <div className="text-center px-6">
+                <div className="welcome-logo mb-8">
+                  <span>G</span>
                 </div>
                 <h2 className="text-4xl font-bold mb-4">How can I help you today?</h2>
-                <p className="text-gray-400 text-lg">Ask anything. Attach files. Build something amazing.</p>
+                <p className="text-muted text-lg">Ask anything. Attach files. Build something amazing.</p>
               </div>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+            <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
               {messages.map((msg) => (
                 <ChatMessage key={msg.id || msg.timestamp} message={msg} />
               ))}
@@ -119,8 +118,8 @@ export default function App() {
         </main>
 
         {/* Input */}
-        <footer className="border-t border-white/10 bg-[#0f0f10]/80 backdrop-blur">
-          <div className="max-w-4xl mx-auto p-6">
+        <footer className="border-t border-border bg-backdrop">
+          <div className="max-w-5xl mx-auto p-6">
             <ChatInput onSend={handleSend} disabled={!currentConv} />
           </div>
         </footer>
