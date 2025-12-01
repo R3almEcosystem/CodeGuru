@@ -1,49 +1,49 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
+import { Message } from '../types';
 
-export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
+// === Validation ===
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables!');
-  console.error('Please create .env.local with:');
-  console.error('VITE_SUPABASE_URL=your-supabase-url');
-  console.error('VITE_SUPABASE_ANON_KEY=your-anon-key');
+  console.error('Please create .env file with:');
+  console.error('VITE_SUPABASE_URL=your-url');
+  console.error('VITE_SUPABASE_ANON_KEY=your-key');
   throw new Error('Supabase configuration is missing');
 }
 
+// === Client ===
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-/** Get current authenticated user ID (or null) */
-export async function getUserId(): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
+// === Get Current User ID — throws if not authenticated ===
+export const getUserId = async (): Promise<string> => {
+  const { data, error } = await supabase.auth.getUser();
 
-/** Fallback anonymous ID for unauthenticated users */
-export function getAnonymousUserId(): string {
-  const key = 'codeguru_anon_id';
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = 'anon_' + crypto.randomUUID();
-    localStorage.setItem(key, id);
+  if (error || !data?.user?.id) {
+    console.warn('No authenticated user found:', error);
+    throw new Error('User not authenticated. Please sign in.');
   }
-  return id;
-}
 
-/** Upload file to Supabase Storage */
-export async function uploadFile(
-  file: File,
-  bucket = 'chat-attachments',
-  folder = 'chat'
-): Promise<{ publicUrl: string; path: string; error?: any }> {
-  const userId = (await getUserId()) || getAnonymousUserId();
+  return data.user.id;
+};
+
+// === Optional: Get user safely (returns null if not logged in) ===
+export const getUserSafe = async () => {
+  const { data } = await supabase.auth.getUser();
+  return data.user ?? null;
+};
+
+// === File Upload Utility ===
+export const uploadFile = async (file: File) => {
+  const userId = await getUserId();
   const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-  const fileName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileExt}`;
-  const filePath = `${folder}/${userId}/${fileName}`;
+  const fileName = `${crypto.randomUUID()}.${fileExt}`;
+  const filePath = `${userId}/${fileName}`;
 
   const { data, error } = await supabase.storage
-    .from(bucket)
+    .from('chat-attachments')
     .upload(filePath, file, {
       cacheControl: '3600',
       upsert: false,
@@ -51,21 +51,47 @@ export async function uploadFile(
 
   if (error) {
     console.error('Upload failed:', error);
-    return { publicUrl: '', path: '', error };
+    return { data: null, error };
   }
 
   const { data: urlData } = supabase.storage
-    .from(bucket)
+    .from('chat-attachments')
     .getPublicUrl(filePath);
 
   return {
-    publicUrl: urlData.publicUrl,
-    path: filePath,
-    error: undefined,
+    data: {
+      path: filePath,
+      publicUrl: urlData.publicUrl,
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/octet-stream',
+    },
+    error: null,
   };
-}
+};
 
-// Debug (dev only)
+// === Insert Message into DB ===
+export const insertMessage = async (convId: string, message: Message) => {
+  const { error } = await supabase
+    .from('messages')
+    .insert({
+      conversation_id: convId,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      attachments: message.attachments,
+    });
+
+  if (error) {
+    console.error('Insert message failed:', error);
+    throw error;
+  }
+};
+
+// === Default Export (for backward compatibility) ===
+export default supabase;
+
+// === Debug (dev only) ===
 if (import.meta.env.DEV) {
   console.log('Supabase client initialized:', supabaseUrl);
 }
