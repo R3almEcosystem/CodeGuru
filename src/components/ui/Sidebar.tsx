@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Folder, MessageSquare, ChevronDown, ChevronRight, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Folder, MessageSquare, ChevronDown, ChevronRight, Edit2 } from 'lucide-react';
 import type { Project, Conversation } from '../../types';
 
 interface SidebarProps {
@@ -26,8 +26,6 @@ export default function Sidebar({
   onSwitchConversation,
   onCreateProject,
   onCreateConversation,
-  onDeleteProject,
-  onDeleteConversation,
 }: SidebarProps) {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     new Set(currentProject ? [currentProject.id] : [])
@@ -49,11 +47,8 @@ export default function Sidebar({
     setEditingConvId(convId);
     setEditTitle(currentTitle);
   };
-
-  const saveEdit = async (convId: string) => {
-    if (editTitle.trim()) {
-      await onRenameConversation(convId, editTitle.trim());
-    }
+  const saveEdit = () => {
+    // Just close edit mode
     setEditingConvId(null);
   };
 
@@ -147,15 +142,15 @@ export default function Sidebar({
                           onMouseLeave={() => setHoveredConvId(null)}
                         >
                           {editingConvId === conv.id ? (
-                            <input
-                              autoFocus
-                              value={editTitle}
-                              onChange={e => setEditTitle(e.target.value)}
-                              onBlur={() => saveEdit(conv.id)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') saveEdit(conv.id);
-                                if (e.key === 'Escape') setEditingConvId(null);
-                              }}
+                              <input
+                                autoFocus
+                                value={editTitle}
+                                onChange={e => setEditTitle(e.target.value)}
+                                onBlur={() => saveEdit()}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') saveEdit();
+                                  if (e.key === 'Escape') setEditingConvId(null);
+                                }}
                               onClick={e => e.stopPropagation()}
                               className="flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
                             />
@@ -179,16 +174,6 @@ export default function Sidebar({
                                     title="Rename"
                                   >
                                     <Edit2 className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      onDeleteConversation(conv.id);
-                                    }}
-                                    className="p-1 hover:bg-red-500/20 text-red-400 rounded transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
                               )}

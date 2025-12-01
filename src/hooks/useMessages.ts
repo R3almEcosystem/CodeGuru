@@ -1,7 +1,7 @@
 // src/hooks/useMessages.ts
 import { useState, useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
-import { Message, FileAttachment, Conversation, Project, StreamingMessage } from '../types';
+import { Message, FileAttachment, Conversation, Project } from '../types';
 import { useSettings } from './useSettings';
 import { callXAI } from '../lib/xai';
 
@@ -12,11 +12,10 @@ type Setters = {
 
 export function useMessages(
   urlProjectId?: string | null,
-  urlConvId?: string | null,
   setters?: Setters
 ) {
   const { model } = useSettings();
-  const [messages, setMessages] = useState<StreamingMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConv, setCurrentConv] = useState<Conversation | null>(null);
@@ -127,7 +126,7 @@ export function useMessages(
     if (!currentConv) return;
 
     const msgWithAttachments = { ...message, attachments };
-    setMessages(prev => [...prev, { ...msgWithAttachments, streaming: message.role === 'assistant' } as StreamingMessage]);
+    setMessages(prev => [...prev, msgWithAttachments]);
 
     try {
       const { data } = await supabase
@@ -159,11 +158,10 @@ export function useMessages(
   const streamGrokResponse = async (signal: AbortSignal) => {
     if (!currentConv) return;
 
-    const assistantMsg: StreamingMessage = {
+    const assistantMsg: Message = {
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
-      streaming: true,
     };
     setMessages(prev => [...prev, assistantMsg]);
 
@@ -171,7 +169,6 @@ export function useMessages(
       // CORRECT: messages first, model string second
       const response = await callXAI(
         messages
-          .filter(m => !m.streaming)
           .map(m => ({ role: m.role, content: m.content })),
         model || 'grok-beta'
       );

@@ -2,9 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Message, FileAttachment } from '../types';
+import type { Message, FileAttachment } from '../types';
 import { supabase, insertMessage, uploadFile } from '../lib/supabase';
 import { useSettings } from '../hooks/useSettings';
 
@@ -13,7 +11,7 @@ interface ChatInterfaceProps {
 }
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({ convId }) => {
-  const { settings } = useSettings();
+  const { apiKey, model } = useSettings();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);

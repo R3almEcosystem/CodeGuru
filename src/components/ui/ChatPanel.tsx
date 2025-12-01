@@ -13,11 +13,12 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
-  const { apiKey, baseUrl, model } = useSettings();
+  const { apiKey, model } = useSettings();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [streamingContent, setStreamingContent] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,111 +28,169 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
       loadMessages();
     } else {
       setMessages([]);
+      setInput('');
+      setFiles([]);
     }
   }, [convId]);
 
   const loadMessages = async () => {
     if (!convId) return;
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true });
-    setMessages((data || []).map((m: any) => ({
-      ...m,
-      timestamp: new Date(m.created_at).getTime(),
-    })));
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading messages:', error);
+        setMessages([]);
+      } else {
+        setMessages(
+          (data || []).map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.created_at).getTime(),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+      setMessages([]);
+    }
   };
 
   // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
   const handleSendMessage = async () => {
     if (!input.trim() || !convId || isLoading || !apiKey) return;
 
-    const userMessage: Message = {
-      role: 'user',
-      content: input.trim(),
-      timestamp: Date.now(),
-      attachments: files.length > 0 ? files.map(f => ({
-        id: crypto.randomUUID(),
-        name: f.name,
-        size: f.size,
-        type: f.type,
-      })) : undefined,
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userContent = input.trim();
+    const userFiles = [...files];
+    
+    // Clear input immediately for better UX
     setInput('');
     setFiles([]);
     setIsLoading(true);
 
-    // Save user message
-    await onSendMessage(userMessage);
+    try {
+      // Prepare user message with attachments
+      const userMessage: Message = {
+        role: 'user',
+        content: userContent,
+        timestamp: Date.now(),
+        attachments: userFiles.length > 0
+          ? userFiles.map(f => ({
+              id: crypto.randomUUID(),
+              name: f.name,
+              size: f.size,
+              type: f.type,
+            }))
+          : undefined,
+      };
 
-    // Stream assistant response
+      // Add to local state
+      setMessages(prev => [...prev, userMessage]);
+
+      // Save user message to DB
+      await onSendMessage(userMessage);
+
+      // Stream assistant response
+      await streamAssistantResponse(userMessage);
+    } catch (err) {
+      console.error('Error sending message:', err);
+      setInput(userContent); // Restore input on error
+      setFiles(userFiles);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const streamAssistantResponse = async (userMessage: Message) => {
+    if (!convId || !apiKey || !model) return;
+
+    // Add placeholder for streaming message
     const assistantMsg: Message = {
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
     };
     setMessages(prev => [...prev, assistantMsg]);
+    setStreamingContent('');
 
     try {
-      const response = await callXAI(
-        messages
-          .filter(m => !m.content.includes(''))
-          .concat(userMessage)
-          .map(m => ({ role: m.role, content: m.content })),
-        settings.model || 'grok-beta'
-      );
+      // Prepare messages for API call
+      const apiMessages = messages
+        .concat(userMessage)
+        .map(m => ({
+          role: m.role,
+          content: m.content,
+        }));
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      // Call xAI API with streaming
+      const response = await callXAI(apiMessages, model);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
-      let content = '';
+      let buffer = '';
+      let fullContent = '';
 
+      // Stream the response
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
           const data = line.slice(6).trim();
           if (!data || data === '[DONE]') continue;
+
           try {
             const parsed = JSON.parse(data);
             const delta = parsed.choices?.[0]?.delta?.content || '';
             if (delta) {
-              content += delta;
-              setMessages(prev =>
-                prev.map(m =>
-                  m.timestamp === assistantMsg.timestamp ? { ...m, content } : m
-                )
-              );
+              fullContent += delta;
+              setStreamingContent(fullContent);
             }
           } catch (e) {
-            // Parse error, skip
+            // Ignore parse errors
           }
         }
       }
 
-      // Save assistant message
-      await supabase.from('messages').insert({
-        conversation_id: convId,
-        role: 'assistant',
-        content,
-      });
+      // Save final message to DB
+      if (fullContent) {
+        await supabase.from('messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: fullContent,
+        });
+
+        // Update messages state with final content
+        setMessages(prev =>
+          prev.map(m =>
+            m.timestamp === assistantMsg.timestamp
+              ? { ...m, content: fullContent }
+              : m
+          )
+        );
+      }
     } catch (err) {
-      console.error('Failed to stream response:', err);
+      console.error('Streaming error:', err);
+      // Remove the failed message
       setMessages(prev => prev.filter(m => m.timestamp !== assistantMsg.timestamp));
     } finally {
-      setIsLoading(false);
+      setStreamingContent('');
     }
   };
 
@@ -139,7 +198,7 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
     <div className="flex-1 flex flex-col">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        {messages.length === 0 ? (
+        {messages.length === 0 && streamingContent === '' ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
               <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-lg ring-4 ring-white/10">
@@ -188,7 +247,24 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
                 )}
               </div>
             ))}
-            {isLoading && (
+
+            {/* Streaming message */}
+            {streamingContent && (
+              <div className="flex gap-4 justify-start">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
+                  G
+                </div>
+                <div className="max-w-2xl rounded-lg px-4 py-3 bg-card border border-border text-foreground">
+                  <div className="prose prose-invert max-w-none text-sm">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {streamingContent}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isLoading && !streamingContent && (
               <div className="flex gap-4 justify-start">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex-shrink-0 flex items-center justify-center">
                   <Loader2 className="w-4 h-4 animate-spin text-white" />
@@ -219,7 +295,7 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
                   <span className="truncate max-w-xs">{f.name}</span>
                   <button
                     onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
-                    className="ml-1 hover:text-red-400"
+                    className="ml-1 hover:text-red-400 transition-colors"
                   >
                     ✕
                   </button>
@@ -231,8 +307,8 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+              disabled={isLoading || !convId}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Attach file"
             >
               <Paperclip className="w-5 h-5" />
@@ -258,12 +334,12 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
               }}
               placeholder="Message CodeGuru..."
               disabled={isLoading || !convId}
-              className="flex-1 bg-white/5 border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              className="flex-1 bg-white/5 border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={handleSendMessage}
               disabled={isLoading || !input.trim() || !convId}
-              className="p-2.5 bg-gradient-user hover:opacity-90 disabled:opacity-50 rounded-lg transition-all flex-shrink-0"
+              className="p-2.5 bg-gradient-user hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all flex-shrink-0"
               title="Send message"
             >
               <Send className="w-5 h-5 text-white" />
