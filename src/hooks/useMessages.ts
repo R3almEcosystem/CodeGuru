@@ -65,18 +65,23 @@ export function useMessages(
     return data || [];
   };
 
+  // FIXED: Use `created_at` instead of `timestamp`
   const loadMessages = async (convId: string) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', convId)
-      .order('timestamp', { ascending: true });
+      .order('created_at', { ascending: true }); // ← FIXED
 
     if (error) {
       console.error('loadMessages error:', error);
       setMessages([]);
     } else {
-      setMessages(data || []);
+      setMessages((data || []).map(msg => ({
+        ...msg,
+        // Map created_at → timestamp for frontend
+        timestamp: new Date(msg.created_at).getTime(),
+      })));
     }
   };
 
@@ -86,10 +91,7 @@ export function useMessages(
 
     const { data, error } = await supabase
       .from('projects')
-      .insert({
-        title,
-        user_id: userId,
-      })
+      .insert({ title, user_id: userId })
       .select()
       .single();
 
@@ -165,15 +167,18 @@ export function useMessages(
           conversation_id: currentConv.id,
           role: message.role,
           content: message.content,
-          timestamp: message.timestamp,
+          // No timestamp field → let Supabase auto-set created_at
           attachments: attachments || [],
         })
         .select()
         .single();
 
       if (error) throw error;
+
       if (data) {
-        setMessages(prev => prev.map(m => m.timestamp === message.timestamp ? { ...m, id: data.id } : m));
+        setMessages(prev => prev.map(m =>
+          m.timestamp === message.timestamp ? { ...m, id: data.id } : m
+        ));
       }
 
       if (message.role === 'user') {
@@ -249,7 +254,7 @@ export function useMessages(
         conversation_id: currentConv.id,
         role: 'assistant',
         content,
-        timestamp: assistantMsg.timestamp,
+        // created_at auto-set by DB
       });
 
       if (messages.length === 1) {
@@ -316,7 +321,6 @@ export function useMessages(
     if (currentProject?.id === id) setCurrentProject(prev => prev ? { ...prev, title } : null);
   };
 
-  // ONE-TIME INITIALIZATION — FIXED
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -331,26 +335,19 @@ export function useMessages(
 
       userIdRef.current = uid;
 
-      // Load everything fresh
       const loadedProjects = await loadProjects();
       setProjects(loadedProjects);
 
       let targetProjectId = urlProjectId || loadedProjects[0]?.id;
 
-      let projectToUse;
       if (!targetProjectId) {
-        projectToUse = await createProject('My First Project');
-        targetProjectId = projectToUse?.id;
-      } else {
-        projectToUse = loadedProjects.find(p => p.id === targetProjectId) || loadedProjects[0];
+        const newProj = await createProject('My First Project');
+        targetProjectId = newProj?.id;
       }
 
-      if (!targetProjectId || !projectToUse) {
-        setIsLoading(false);
-        return;
+      if (targetProjectId) {
+        await switchProject(targetProjectId);
       }
-
-      await switchProject(targetProjectId);
 
       setIsLoading(false);
     };
