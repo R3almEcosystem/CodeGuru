@@ -1,8 +1,21 @@
 // src/components/HierarchicalSidebar.tsx
 import { useState } from 'react';
-import { Plus, Folder, MessageSquare, ChevronRight, ChevronDown, Settings, Trash2, Edit2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { 
+  Plus, 
+  Folder, 
+  MessageSquare, 
+  ChevronRight, 
+  ChevronDown, 
+  Settings, 
+  Trash2, 
+  Edit2 
+} from 'lucide-react';
 import type { Project, Conversation } from '@/types';
+
+// Inline cn utility — replaces "@/lib/utils" completely
+const cn = (...inputs: (string | undefined | null | false)[]) => {
+  return inputs.filter(Boolean).join(' ');
+};
 
 interface HierarchicalSidebarProps {
   projects: Project[];
@@ -26,9 +39,7 @@ const HierarchicalSidebar = ({
   onCreateConversation,
 }: HierarchicalSidebarProps) => {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [editingProject, setEditingProject] = useState<string | null>(null);
-  const [editingConv, setEditingConv] = useState<string | null>(null);
-  const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [newProjectTitle, setNewProjectTitle] = useState<string | undefined>(undefined);
 
   const toggleProject = (projectId: string) => {
     setExpandedProjects(prev => {
@@ -40,33 +51,29 @@ const HierarchicalSidebar = ({
   };
 
   const handleCreateProject = async () => {
-    const title = newProjectTitle.trim() || 'New Project';
-    const project = await onCreateProject(title);
+    if (!newProjectTitle?.trim()) return;
+    const project = await onCreateProject(newProjectTitle.trim());
     if (project) {
-      setNewProjectTitle('');
+      setNewProjectTitle(undefined);
       setExpandedProjects(prev => new Set(prev).add(project.id));
     }
   };
 
-  const projectConvs = conversations.filter(c => c.project_id === currentProject?.id);
-
   return (
     <div className="w-80 bg-muted/50 border-r border-border flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Workspace</h2>
-          <button
-            onClick={() => setNewProjectTitle('New Project')}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Workspace</h2>
+        <button
+          onClick={() => setNewProjectTitle('New Project')}
+          className="p-2 hover:bg-muted rounded-lg transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
       {/* New Project Input */}
-      {newProjectTitle !== undefined && newProjectTitle !== '' && (
+      {newProjectTitle !== undefined && (
         <div className="p-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Folder className="w-5 h-5 text-muted-foreground" />
@@ -76,9 +83,9 @@ const HierarchicalSidebar = ({
               onChange={(e) => setNewProjectTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleCreateProject();
-                if (e.key === 'Escape') setNewProjectTitle('');
+                if (e.key === 'Escape') setNewProjectTitle(undefined);
               }}
-              onBlur={() => setNewProjectTitle('')}
+              onBlur={() => setNewProjectTitle(undefined)}
               className="flex-1 bg-transparent outline-none text-sm"
               placeholder="Project name..."
             />
