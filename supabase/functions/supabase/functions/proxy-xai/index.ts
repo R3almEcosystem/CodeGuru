@@ -1,22 +1,31 @@
+// supabase/functions/proxy-xai/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const XAI_API_KEY = Deno.env.get("XAI_API_KEY");
+const XAI_API_KEY = Deno.env.get("XAI_API_KEY")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY")!;  // ← changed name
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "https://gsljjtirhyzmbzzucufu.supabase.co";
+
+console.log("proxy-xai started — keys loaded:", { hasXaiKey: !!XAI_API_KEY, hasServiceKey: !!SERVICE_ROLE_KEY });
 
 serve(async (req: Request) => {
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, content-type, x-client-info, apikey",
+  };
+
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
+  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
+
+  const auth = req.headers.get("Authorization");
+  if (!auth?.startsWith("Bearer ")) {
+    return new Response("Missing token", { status: 401, headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const token = auth.split(" ")[1];
 
-  const token = authHeader.split(" ")[1];
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-  const verifyResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+  // Verify JWT using service_role key
+  const verify = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
     method: "POST",
     headers: {
       apikey: SERVICE_ROLE_KEY,
@@ -26,13 +35,14 @@ serve(async (req: Request) => {
     body: JSON.stringify({ token }),
   });
 
-  if (!verifyResponse.ok || !(await verifyResponse.json()).user) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verify.ok) {
+    console.error("JWT verify failed:", await verify.text());
+    return new Response("Invalid token", { status: 401, headers: corsHeaders });
   }
 
   const payload = await req.json();
 
-  const xaiResponse = await fetch("https://api.x.ai/v1/chat/completions", {
+  const xai = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -41,10 +51,11 @@ serve(async (req: Request) => {
     body: JSON.stringify(payload),
   });
 
-  return new Response(xaiResponse.body, {
-    status: xaiResponse.status,
+  return new Response(xai.body, {
+    status: xai.status,
     headers: {
-      "Content-Type": "application/json",
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
     },
   });
