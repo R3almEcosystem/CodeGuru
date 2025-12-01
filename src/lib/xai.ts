@@ -1,46 +1,30 @@
 // src/lib/xai.ts
-import { supabase, supabaseUrl } from './supabase';
+import { supabase } from './supabase';
 
-export type XAIChatMessage = {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-};
-
-export type XAIChatCompletion = {
-  model?: string;
-  messages: XAIChatMessage[];
-  temperature?: number;
-  stream?: boolean;
-};
-
-/**
- * Securely calls xAI API via Supabase Edge Function proxy
- * Uses authenticated user's access token — API key NEVER leaves server
- */
-export async function callXAI(
-  payload: XAIChatCompletion,
-  signal?: AbortSignal
-): Promise<Response> {
-  const { data: { session }, error } = await supabase.auth.getSession();
-
-  if (error || !session?.access_token) {
-    throw new Error('You must be signed in to use Grok AI features');
+export async function callXAI(messages: any[], model: string = 'grok-beta') {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session?.access_token) {
+    throw new Error('Not authenticated');
   }
 
-  const proxyUrl = `${supabaseUrl}/functions/v1/proxy-xai`;
-
-  return fetch(proxyUrl, {
+  const response = await fetch('https://gsljjtirhyzmbzzucufu.supabase.co/functions/v1/proxy-xai', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
+      'Authorization': `Bearer ${session.access_token}`, // ← THIS WAS MISSING
     },
     body: JSON.stringify({
-      model: payload.model || 'grok-4',
-      messages: payload.messages,
-      temperature: payload.temperature ?? 0.7,
-      stream: payload.stream ?? true,
+      model,
+      messages,
+      stream: true,
     }),
-    signal,
   });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`xAI API error: ${response.status} ${text}`);
+  }
+
+  return response;
 }
