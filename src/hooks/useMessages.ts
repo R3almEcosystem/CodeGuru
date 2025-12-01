@@ -29,7 +29,8 @@ export function useMessages(
 
   const loadProjects = async () => {
     const userId = userIdRef.current;
-    if (!userId) return;
+    if (!userId) return [];
+
     const { data, error } = await supabase
       .from('projects')
       .select('id, title, created_at, updated_at')
@@ -38,15 +39,14 @@ export function useMessages(
 
     if (error) {
       console.error('loadProjects error:', error);
-      setProjects([]);
-    } else {
-      setProjects(data || []);
+      return [];
     }
+    return data || [];
   };
 
   const loadConversations = async (projectId?: string | null) => {
     const userId = userIdRef.current;
-    if (!userId) return;
+    if (!userId) return [];
 
     let query = supabase
       .from('conversations')
@@ -60,10 +60,9 @@ export function useMessages(
 
     if (error) {
       console.error('loadConversations error:', error);
-      setConversations([]);
-    } else {
-      setConversations(data || []);
+      return [];
     }
+    return data || [];
   };
 
   const loadMessages = async (convId: string) => {
@@ -83,74 +82,74 @@ export function useMessages(
 
   const createProject = async (title: string = 'New Project') => {
     const userId = userIdRef.current;
-    if (!userId) return;
+    if (!userId) return null;
 
     const { data, error } = await supabase
       .from('projects')
       .insert({
         title,
         user_id: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) {
       console.error('createProject error:', error);
-    } else if (data) {
-      setProjects(prev => [data, ...prev]);
-      await switchProject(data.id);
-      await createConversation(data.id);
+      return null;
     }
+
+    setProjects(prev => [data, ...prev]);
+    return data;
   };
 
   const createConversation = async (projectId?: string) => {
     const userId = userIdRef.current;
-    if (!userId) return;
+    if (!userId) return null;
 
     const { data, error } = await supabase
       .from('conversations')
       .insert({
         title: 'New Conversation',
-        project_id: projectId || currentProject?.id,
+        project_id: projectId || currentProject?.id || null,
         user_id: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) {
       console.error('createConversation error:', error);
-    } else if (data) {
-      setConversations(prev => [data, ...prev]);
-      await switchConversation(data.id);
+      return null;
     }
+
+    setConversations(prev => [data, ...prev]);
+    return data;
   };
 
   const switchProject = async (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    if (project) {
-      setCurrentProject(project);
-      safeSetProjectId(projectId);
-      await loadConversations(projectId);
-      const projectConvs = conversations.filter(c => c.project_id === projectId);
-      if (projectConvs.length > 0) {
-        await switchConversation(projectConvs[0].id);
-      } else {
-        await createConversation(projectId);
-      }
+    const project = projects.find(p => p.id === projectId) || (await loadProjects()).find(p => p.id === projectId);
+    if (!project) return;
+
+    setCurrentProject(project);
+    safeSetProjectId(projectId);
+
+    const convs = await loadConversations(projectId);
+    setConversations(convs);
+
+    const targetConv = convs[0] || await createConversation(projectId);
+    if (targetConv) {
+      setCurrentConv(targetConv);
+      safeSetConvId(targetConv.id);
+      await loadMessages(targetConv.id);
     }
   };
 
   const switchConversation = async (convId: string) => {
     const conv = conversations.find(c => c.id === convId);
-    if (conv) {
-      setCurrentConv(conv);
-      safeSetConvId(convId);
-      await loadMessages(convId);
-    }
+    if (!conv) return;
+
+    setCurrentConv(conv);
+    safeSetConvId(convId);
+    await loadMessages(convId);
   };
 
   const addMessage = async (message: Message, attachments?: FileAttachment[]) => {
@@ -173,7 +172,6 @@ export function useMessages(
         .single();
 
       if (error) throw error;
-
       if (data) {
         setMessages(prev => prev.map(m => m.timestamp === message.timestamp ? { ...m, id: data.id } : m));
       }
@@ -257,7 +255,7 @@ export function useMessages(
       if (messages.length === 1) {
         const title = content.slice(0, 50).trim() + (content.length > 50 ? '...' : '');
         await supabase.from('conversations').update({ title }).eq('id', currentConv.id);
-        setCurrentConv({ ...currentConv, title });
+        setCurrentConv(prev => prev ? { ...prev, title } : null);
         setConversations(prev => prev.map(c => c.id === currentConv.id ? { ...c, title } : c));
       }
     } catch (err) {
@@ -282,30 +280,26 @@ export function useMessages(
   };
 
   const deleteProject = async (projectId: string) => {
-    // Get all conversation IDs in this project
     const convsInProject = conversations.filter(c => c.project_id === projectId);
     const convIds = convsInProject.map(c => c.id);
 
-    // Delete all messages in those conversations
     if (convIds.length > 0) {
       await supabase.from('messages').delete().in('conversation_id', convIds);
       await supabase.from('conversations').delete().in('id', convIds);
     }
 
-    // Delete the project
     await supabase.from('projects').delete().eq('id', projectId);
 
-    // Update state
     setProjects(prev => prev.filter(p => p.id !== projectId));
     setConversations(prev => prev.filter(c => c.project_id !== projectId));
 
-    // If deleted project was current → switch to another or create new
     if (currentProject?.id === projectId) {
-      const remainingProjects = projects.filter(p => p.id !== projectId);
-      if (remainingProjects.length > 0) {
-        await switchProject(remainingProjects[0].id);
+      const remaining = projects.filter(p => p.id !== projectId);
+      if (remaining.length > 0) {
+        await switchProject(remaining[0].id);
       } else {
-        await createProject('New Project');
+        const newProj = await createProject('New Project');
+        if (newProj) await switchProject(newProj.id);
       }
     }
   };
@@ -313,15 +307,16 @@ export function useMessages(
   const updateConversationTitle = async (id: string, title: string) => {
     await supabase.from('conversations').update({ title }).eq('id', id);
     setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c));
-    if (currentConv?.id === id) setCurrentConv({ ...currentConv, title });
+    if (currentConv?.id === id) setCurrentConv(prev => prev ? { ...prev, title } : null);
   };
 
   const updateProjectTitle = async (id: string, title: string) => {
     await supabase.from('projects').update({ title }).eq('id', id);
     setProjects(prev => prev.map(p => p.id === id ? { ...p, title } : p));
-    if (currentProject?.id === id) setCurrentProject({ ...currentProject, title });
+    if (currentProject?.id === id) setCurrentProject(prev => prev ? { ...prev, title } : null);
   };
 
+  // ONE-TIME INITIALIZATION — FIXED
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -329,32 +324,39 @@ export function useMessages(
     const init = async () => {
       setIsLoading(true);
       const uid = await getUserId();
-      if (!uid) return setIsLoading(false);
+      if (!uid) {
+        setIsLoading(false);
+        return;
+      }
 
       userIdRef.current = uid;
-      await loadProjects();
-      await loadConversations();
 
-      let targetProjectId = urlProjectId || projects[0]?.id;
+      // Load everything fresh
+      const loadedProjects = await loadProjects();
+      setProjects(loadedProjects);
+
+      let targetProjectId = urlProjectId || loadedProjects[0]?.id;
+
+      let projectToUse;
       if (!targetProjectId) {
-        await createProject('Default Project');
+        projectToUse = await createProject('My First Project');
+        targetProjectId = projectToUse?.id;
+      } else {
+        projectToUse = loadedProjects.find(p => p.id === targetProjectId) || loadedProjects[0];
+      }
+
+      if (!targetProjectId || !projectToUse) {
+        setIsLoading(false);
         return;
       }
 
       await switchProject(targetProjectId);
 
-      let targetConvId = urlConvId || conversations.find(c => c.project_id === targetProjectId)?.id;
-      if (!targetConvId) {
-        await createConversation(targetProjectId);
-      } else {
-        await switchConversation(targetConvId);
-      }
-
       setIsLoading(false);
     };
 
     init();
-  }, []);
+  }, [urlProjectId, urlConvId]);
 
   return {
     messages,
