@@ -10,3 +10,23 @@ export default {
   },
   plugins: [],
 }
+
+// tailwind.config.js
+module.exports = {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        background: 'var(--grok-bg)',
+        foreground: 'var(--grok-text)',
+        muted: 'var(--grok-muted)',
+        border: 'var(--grok-border)',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
+  },
+  plugins: [],
+};

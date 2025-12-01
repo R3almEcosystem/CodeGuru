@@ -1,19 +1,143 @@
-// tailwind.config.js
-module.exports = {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  darkMode: 'class',
-  theme: {
-    extend: {
-      colors: {
-        background: 'var(--grok-bg)',
-        foreground: 'var(--grok-text)',
-        muted: 'var(--grok-muted)',
-        border: 'var(--grok-border)',
-      },
-      backdropBlur: {
-        xs: '2px',
-      },
-    },
-  },
-  plugins: [],
-};
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === GROK.NEW EXACT COLOR PALETTE (DEC 2025) === */
+:root {
+  --grok-bg: #0f0f10;
+  --grok-sidebar: #1a1a1a;
+  --grok-header: rgba(15, 15, 16, 0.8);
+  --grok-border: rgba(255, 255, 255, 0.1);
+  --grok-text: #ffffff;
+  --grok-muted: #a1a1aa;
+  --grok-user-gradient-from: #3b82f6;
+  --grok-user-gradient-to: #a855f7;
+  --grok-grok-gradient-from: #10b981;
+  --grok-grok-gradient-to: #0d9488;
+}
+
+/* Force dark mode — Grok.new is dark-only */
+.dark {
+  color-scheme: dark;
+}
+
+/* === GLOBAL RESET & BASE STYLES === */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--grok-bg);
+  color: var(--grok-text);
+  overflow: hidden;
+}
+
+/* === BACKDROP BLUR FOR HEADERS & FOOTERS === */
+.bg-backdrop {
+  background-color: var(--grok-header);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* === CUSTOM GRADIENTS === */
+.gradient-grok {
+  background: linear-gradient(135deg, var(--grok-grok-gradient-from), var(--grok-grok-gradient-to));
+}
+
+.gradient-user {
+  background: linear-gradient(135deg, var(--grok-user-gradient-from), var(--grok-user-gradient-to));
+}
+
+/* === AVATAR STYLES === */
+.avatar-grok {
+  @apply w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg ring-4 ring-white/20 gradient-grok;
+}
+
+.avatar-user {
+  @apply w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg gradient-user;
+}
+
+/* === SCROLLBAR STYLING (Grok.new style) === */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* === PROSE (Markdown) OVERRIDES === */
+.prose {
+  @apply text-white/90 max-w-none;
+}
+
+.prose code {
+  @apply bg-white/10 px-2 py-1 rounded text-sm font-mono;
+}
+
+.prose pre {
+  @apply bg-black/50 border border-white/10 rounded-xl p-4 overflow-x-auto;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0 text-sm;
+}
+
+/* === INPUT & TEXTAREA === */
+input, textarea {
+  @apply bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all;
+}
+
+textarea {
+  min-height: 56px;
+  max-height: 200px;
+  resize: none;
+}
+
+/* === BUTTONS === */
+.btn-send {
+  @apply bg-blue-600 hover:bg-blue-700 disabled:bg-white/10 disabled:text-white/30 text-white rounded-xl px-6 py-3 flex items-center gap-2 font-medium transition-all shadow-lg disabled:shadow-none disabled:cursor-not-allowed;
+}
+
+.btn-attach {
+  @apply p-3 hover:bg-white/10 rounded-xl transition-all;
+}
+
+/* === WELCOME SCREEN LOGO === */
+.welcome-logo {
+  @apply w-32 h-32 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-6xl font-black text-white shadow-2xl ring-8 ring-white/20;
+}
+
+/* === UTILITY CLASSES === */
+.text-muted { @apply text-gray-400; }
+.text-foreground { @apply text-white; }
+.bg-background { @apply bg var(--grok-bg); }
+.bg-card { @apply bg var(--grok-header); }
+.border-border { @apply border-white/10; }
+
+/* === CODE BLOCK COPY BUTTON === */
+.copy-button {
+  @apply absolute top-3 right-3 bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded backdrop-blur transition-all;
+}
