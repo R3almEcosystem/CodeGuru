@@ -35,6 +35,36 @@ export const getUserSafe = async () => {
   return data.user ?? null;
 };
 
+// === Sign Up ===
+export const signUp = async (email: string, password: string) => {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+};
+
+// === Sign In ===
+export const signIn = async (email: string, password: string) => {
+  return supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+};
+
+// === Sign Out ===
+export const signOut = async () => {
+  return supabase.auth.signOut();
+};
+
+// === Get Current Session ===
+export const getSession = async () => {
+  const { data } = await supabase.auth.getSession();
+  return data.session ?? null;
+};
+
 // === File Upload Utility ===
 export const uploadFile = async (file: File) => {
   const userId = await getUserId();

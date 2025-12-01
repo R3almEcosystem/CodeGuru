@@ -10,9 +10,10 @@ import type { Message, FileAttachment } from '../../types';
 interface ChatPanelProps {
   convId: string | null;
   onSendMessage: (message: Message, attachments?: FileAttachment[]) => Promise<void>;
+  onCreateConversation?: () => Promise<void>;
 }
 
-export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
+export default function ChatPanel({ convId, onSendMessage, onCreateConversation }: ChatPanelProps) {
   const { apiKey, model } = useSettings();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -65,8 +66,18 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
   }, [messages, streamingContent]);
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !convId || isLoading || !apiKey) return;
+    console.log('handleSendMessage called', { input: input.trim(), convId, isLoading });
+    
+    if (!input.trim() || !convId || isLoading) {
+      console.warn('Send blocked:', { 
+        emptyInput: !input.trim(), 
+        noConvId: !convId, 
+        isLoading 
+      });
+      return;
+    }
 
+    console.log('Sending message...');
     const userContent = input.trim();
     const userFiles = [...files];
     
@@ -91,16 +102,24 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
           : undefined,
       };
 
+      console.log('User message prepared:', userMessage);
+
       // Add to local state
       setMessages(prev => [...prev, userMessage]);
 
       // Save user message to DB
+      console.log('Calling onSendMessage...');
       await onSendMessage(userMessage);
+      console.log('Message saved to DB');
 
       // Stream assistant response
+      console.log('Starting assistant response stream...');
       await streamAssistantResponse(userMessage);
+      console.log('Assistant response complete');
     } catch (err) {
       console.error('Error sending message:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      alert('Failed to send message: ' + errorMsg);
       setInput(userContent); // Restore input on error
       setFiles(userFiles);
     } finally {
@@ -109,7 +128,12 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
   };
 
   const streamAssistantResponse = async (userMessage: Message) => {
-    if (!convId || !apiKey || !model) return;
+    if (!convId || !model) {
+      console.error('Missing convId or model:', { convId, model });
+      return;
+    }
+
+    console.log('streamAssistantResponse starting with model:', model);
 
     // Add placeholder for streaming message
     const assistantMsg: Message = {
@@ -129,11 +153,14 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
           content: m.content,
         }));
 
-      // Call xAI API with streaming
+      console.log('Calling xAI with messages:', apiMessages);
+
+      // Call xAI API with streaming (via Supabase edge function)
       const response = await callXAI(apiMessages, model);
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`API error: ${response.status} ${errorText}`);
       }
 
       const reader = response.body!.getReader();
@@ -163,10 +190,13 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
               setStreamingContent(fullContent);
             }
           } catch (e) {
+            console.debug('Parse error for line:', line);
             // Ignore parse errors
           }
         }
       }
+
+      console.log('Stream complete, full content:', fullContent);
 
       // Save final message to DB
       if (fullContent) {
@@ -198,7 +228,23 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
     <div className="flex-1 flex flex-col">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        {messages.length === 0 && streamingContent === '' ? (
+        {!convId ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center max-w-md">
+              <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-lg ring-4 ring-white/10">
+                G
+              </div>
+              <h2 className="text-3xl font-bold mb-3">Start Chatting</h2>
+              <p className="text-muted text-base mb-6">Select a conversation from the sidebar or create a new one</p>
+              <button
+                onClick={onCreateConversation}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              >
+                + New Conversation
+              </button>
+            </div>
+          </div>
+        ) : messages.length === 0 && streamingContent === '' ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
               <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-4xl font-black text-white shadow-lg ring-4 ring-white/10">
@@ -282,14 +328,14 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border bg-backdrop px-6 py-4">
+      <div className="border-t border-border bg-backdrop px-3 py-3 sm:px-6 sm:py-4 min-h-fit">
         <div className="max-w-3xl mx-auto">
           {files.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
+            <div className="mb-2 sm:mb-3 flex flex-wrap gap-2">
               {files.map((f, idx) => (
                 <div
                   key={idx}
-                  className="inline-flex items-center gap-2 bg-white/10 border border-border rounded-lg px-3 py-1.5 text-xs"
+                  className="inline-flex items-center gap-2 bg-white/10 border border-border rounded-lg px-2 sm:px-3 py-1.5 text-xs"
                 >
                   <Paperclip className="w-3 h-3" />
                   <span className="truncate max-w-xs">{f.name}</span>
@@ -304,14 +350,14 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading || !convId}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               title="Attach file"
             >
-              <Paperclip className="w-5 h-5" />
+              <Paperclip className="w-4 sm:w-5 h-4 sm:h-5" />
             </button>
             <input
               ref={fileInputRef}
@@ -334,15 +380,15 @@ export default function ChatPanel({ convId, onSendMessage }: ChatPanelProps) {
               }}
               placeholder="Message CodeGuru..."
               disabled={isLoading || !convId}
-              className="flex-1 bg-white/5 border border-border rounded-lg px-4 py-2.5 text-sm placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 bg-white/5 border border-border rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-sm placeholder-muted/60 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed min-w-0"
             />
             <button
               onClick={handleSendMessage}
               disabled={isLoading || !input.trim() || !convId}
-              className="p-2.5 bg-gradient-user hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all flex-shrink-0"
+              className="p-2 sm:p-2.5 bg-gradient-user hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-all flex-shrink-0"
               title="Send message"
             >
-              <Send className="w-5 h-5 text-white" />
+              <Send className="w-4 sm:w-5 h-4 sm:h-5 text-white" />
             </button>
           </div>
         </div>

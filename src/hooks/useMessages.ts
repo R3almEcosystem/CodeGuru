@@ -99,14 +99,20 @@ export function useMessages(
   };
 
   const switchProject = async (projectId: string) => {
+    console.log('Switching to project:', projectId);
     const project = projects.find(p => p.id === projectId) || (await loadProjects()).find(p => p.id === projectId);
-    if (!project) return;
+    if (!project) {
+      console.error('Project not found:', projectId);
+      return;
+    }
     setCurrentProject(project);
     safeSetProjectId(projectId);
     const convs = await loadConversations(projectId);
+    console.log('Loaded conversations for project:', convs);
     setConversations(convs);
     const conv = convs[0] || await createConversation(projectId);
     if (conv) {
+      console.log('Switching to conversation:', conv.id);
       setCurrentConv(conv);
       safeSetConvId(conv.id);
       await loadMessages(conv.id);
@@ -114,8 +120,13 @@ export function useMessages(
   };
 
   const switchConversation = async (convId: string) => {
+    console.log('Switching to conversation:', convId);
     const conv = conversations.find(c => c.id === convId);
-    if (!conv) return;
+    if (!conv) {
+      console.error('Conversation not found:', convId, 'Available:', conversations);
+      return;
+    }
+    console.log('Setting current conversation:', conv);
     setCurrentConv(conv);
     safeSetConvId(convId);
     await loadMessages(convId);
@@ -305,18 +316,51 @@ export function useMessages(
 
       userIdRef.current = uid;
 
-      const projs = await loadProjects();
-      setProjects(projs);
+      try {
+        const projs = await loadProjects();
+        setProjects(projs);
 
-      let pid = urlProjectId || projs[0]?.id;
-      if (!pid) {
-        const np = await createProject('My First Project');
-        pid = np?.id;
+        let pid = urlProjectId || projs[0]?.id;
+        if (!pid) {
+          const np = await createProject('My First Project');
+          pid = np?.id;
+        }
+        
+        if (pid) {
+          await switchProject(pid);
+        }
+      } catch (err) {
+        console.error('Error during initialization:', err);
       }
-      if (pid) await switchProject(pid);
+      
       setIsLoading(false);
     };
     init();
+
+    // Listen for auth state changes to trigger re-initialization
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed in useMessages:', event, !!session);
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Reset initialization flag so hook re-initializes
+        initializedRef.current = false;
+        init();
+      } else if (event === 'SIGNED_OUT') {
+        // Clear data on sign out
+        setMessages([]);
+        setConversations([]);
+        setCurrentConv(null);
+        setProjects([]);
+        setCurrentProject(null);
+        userIdRef.current = null;
+        initializedRef.current = false;
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   return {
