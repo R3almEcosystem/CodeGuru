@@ -1,16 +1,12 @@
 // src/App.tsx
-import React, { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
-import { ChatInterface } from './components/ChatInterface';
-import NavigationMenu from './components/NavigationMenu';
-import HierarchicalSidebar from './components/HierarchicalSidebar';
 import { useMessages } from './hooks/useMessages';
+import Sidebar from './components/ui/Sidebar';
+import ChatPanel from './components/ui/ChatPanel';
+import Header from './components/ui/Header';
 
 export default function App() {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const {
-    messages,
     conversations,
     currentConv,
     projects,
@@ -21,9 +17,11 @@ export default function App() {
     switchProject,
     createConversation,
     createProject,
+    deleteConversation,
+    deleteProject,
+    updateConversationTitle,
+    updateProjectTitle,
   } = useMessages();
-
-  // ChatInterface will handle message loading/sending for the active conversation.
 
   if (isLoading) {
     return (
@@ -35,46 +33,32 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* 1. Left Navigation - Fixed 64px */}
-      <div className="w-16 flex-shrink-0 bg-card border-r border-border">
-        <NavigationMenu />
-      </div>
+      {/* Sidebar */}
+      <Sidebar
+        projects={projects}
+        conversations={conversations}
+        currentProject={currentProject}
+        currentConv={currentConv}
+        onSwitchProject={switchProject}
+        onSwitchConversation={switchConversation}
+        onCreateProject={createProject}
+        onCreateConversation={createConversation}
+        onDeleteProject={deleteProject}
+        onDeleteConversation={deleteConversation}
+        onRenameProject={updateProjectTitle}
+        onRenameConversation={updateConversationTitle}
+      />
 
-      {/* 2. Sidebar - Projects & Chats */}
-      <div className="w-80 flex-shrink-0 bg-background border-r border-border overflow-y-auto">
-        <HierarchicalSidebar
-          projects={projects}
-          conversations={conversations}
-          currentProject={currentProject}
-          currentConv={currentConv}
-          onSwitchProject={switchProject}
-          onSwitchConversation={switchConversation}
-          onCreateProject={createProject}
-          onCreateConversation={createConversation}
-        />
-      </div>
-
-      {/* 3. Main Chat Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-
-        {/* Header */}
-        <header className="h-16 flex items-center px-8 border-b border-border bg-backdrop">
-          <div>
-            <h1 className="text-xl font-semibold">
-              {currentConv?.title || 'New Chat'}
-            </h1>
-            {currentProject && (
-              <p className="text-sm text-gray-400">
-                {currentProject.title}
-              </p>
-            )}
-          </div>
-        </header>
-
-        {/* Chat Interface (single consolidated chat component) */}
-        <div className="flex-1 flex flex-col">
-          <ChatInterface convId={currentConv?.id ?? null} />
-        </div>
+        <Header
+          title={currentConv?.title || 'New Chat'}
+          subtitle={currentProject?.title}
+        />
+        <ChatPanel
+          convId={currentConv?.id ?? null}
+          onSendMessage={addMessage}
+        />
       </div>
     </div>
   );

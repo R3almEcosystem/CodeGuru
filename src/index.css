@@ -131,11 +131,29 @@ textarea {
 }
 
 /* === UTILITY CLASSES === */
-.text-muted { @apply text-gray-400; }
+.text-muted { @apply text-white/60; }
 .text-foreground { @apply text-white; }
 .bg-background { background-color: var(--grok-bg); }
+.bg-sidebar { background-color: var(--grok-sidebar); }
 .bg-card { background-color: var(--grok-header); }
 .border-border { @apply border-white/10; }
+
+/* === PROSE STYLING FOR MARKDOWN === */
+.prose {
+  @apply text-foreground max-w-none;
+}
+.prose p { @apply mb-3; }
+.prose h1, .prose h2, .prose h3 { @apply font-semibold mb-2 mt-4; }
+.prose code { @apply bg-white/10 px-1.5 py-0.5 rounded text-sm font-mono; }
+.prose pre {
+  @apply bg-black/50 border border-white/10 rounded-lg p-4 overflow-x-auto;
+}
+.prose pre code {
+  @apply bg-transparent p-0 text-xs;
+}
+.prose a { @apply text-blue-400 hover:underline; }
+.prose ul, .prose ol { @apply ml-4 mb-3; }
+.prose li { @apply mb-1; }
 
 /* === CODE BLOCK COPY BUTTON === */
 .copy-button {
