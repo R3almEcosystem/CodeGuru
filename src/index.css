@@ -133,8 +133,8 @@ textarea {
 /* === UTILITY CLASSES === */
 .text-muted { @apply text-gray-400; }
 .text-foreground { @apply text-white; }
-.bg-background { @apply bg var(--grok-bg); }
-.bg-card { @apply bg var(--grok-header); }
+.bg-background { background-color: var(--grok-bg); }
+.bg-card { background-color: var(--grok-header); }
 .border-border { @apply border-white/10; }
 
 /* === CODE BLOCK COPY BUTTON === */
