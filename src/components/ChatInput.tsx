@@ -9,7 +9,7 @@ interface ChatInputProps {
   disabled?: boolean;
 }
 
-export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+const ChatInput = ({ onSend, disabled = false }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -103,7 +103,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
               <button
                 type="button"
                 onClick={() => removeAttachment(i)}
-                className="ml-1 hover:text-blue-900"
+                className="ml-6 text-2xl hover:opacity-70"
               >
                 ×
               </button>
@@ -148,9 +148,8 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
               <input
                 ref={folderInputRef}
                 type="file"
-                // @ts-ignore - webkitdirectory is widely supported
-                webkitdirectory=""
-                directory=""
+                webkitdirectory
+                directory
                 multiple
                 onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
@@ -194,4 +193,6 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
       </div>
     </form>
   );
-}
+};
+
+export default ChatInput;
