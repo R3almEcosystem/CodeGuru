@@ -1,10 +1,14 @@
 // src/components/ChatMessage.tsx
 import { useState } from 'react';
-import { Bot, User, Paperclip, Download, FileText, AlertCircle } from 'lucide-react';
-import { Message, FileAttachment } from '../types';
+import { Bot, User, Paperclip, Download, FileText, AlertCircle, Copy, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { StreamingMessage, FileAttachment } from '../types';
 
 interface ChatMessageProps {
-  message: Message;
+  message: StreamingMessage;
 }
 
 function AttachmentPreview({ attachment }: { attachment: FileAttachment }) {
@@ -55,63 +59,37 @@ function AttachmentPreview({ attachment }: { attachment: FileAttachment }) {
   };
 
   const loadPreviewText = async () => {
-    if (previewText !== null) return; // Already loaded
-
     try {
-      let textContent = '';
-      if (attachment.url) {
+      if (attachment.content) {
+        const text = atob(attachment.content);
+        setPreviewText(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
+      } else if (attachment.url) {
         const response = await fetch(attachment.url);
-        if (!response.ok) throw new Error('Failed to fetch file');
-        textContent = await response.text();
-      } else if (attachment.content) {
-        textContent = atob(attachment.content);
+        const text = await response.text();
+        setPreviewText(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
       }
-
-      setPreviewText(textContent.substring(0, 300) + (textContent.length > 300 ? '...' : ''));
     } catch (err) {
       setPreviewError(true);
     }
   };
 
-  const isImage = attachment.type.startsWith('image/');
-  const isText = attachment.type.startsWith('text/') || attachment.name.endsWith('.txt') || attachment.name.endsWith('.md');
-
   return (
-    <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
-      <div className="flex items-center justify-between">
+    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <FileText size={16} className="text-gray-600" />
-          <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-            {attachment.name}
-          </span>
+          <Paperclip size={16} className="text-gray-500" />
+          <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{attachment.name}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
-            {formatFileSize(attachment.size)}
-          </span>
-          <button
-            onClick={downloadFile}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            title="Download file"
-          >
-            <Download size={16} className="text-gray-600" />
-          </button>
-        </div>
+        <button
+          onClick={downloadFile}
+          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+        >
+          <Download size={12} />
+          {formatFileSize(attachment.size)}
+        </button>
       </div>
-
-      {isImage && (
-        <img
-          src={attachment.url || `data:${attachment.type};base64,${attachment.content}`}
-          alt={attachment.name}
-          className="max-w-full h-auto rounded-lg border border-gray-200"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-      )}
-      
-      {isText && (
-        <div className="mt-2 p-2 bg-black/20 rounded text-xs font-mono overflow-auto max-h-32">
+      {attachment.type.startsWith('text/') && (
+        <div className="bg-white p-2 border border-gray-300 rounded text-xs font-mono overflow-auto max-h-32">
           {previewText === null ? (
             <div className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer" onClick={loadPreviewText}>
               <span>Click to preview content</span>
@@ -136,6 +114,10 @@ function AttachmentPreview({ attachment }: { attachment: FileAttachment }) {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
@@ -151,13 +133,52 @@ export function ChatMessage({ message }: ChatMessageProps) {
             : 'bg-gray-100 text-gray-900 rounded-bl-sm'
         }`}
       >
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            code({ node, inline, className, children, ...props }: any) {
+              const match = /language-(\w+)/.exec(className || '');
+              return !inline && match ? (
+                <div className="relative my-2">
+                  <button
+                    onClick={() => copyToClipboard(String(children))}
+                    className="absolute top-2 right-2 p-1 bg-gray-200 hover:bg-gray-300 rounded text-gray-600"
+                    aria-label="Copy code"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <SyntaxHighlighter
+                    style={vscDarkPlus}
+                    language={match[1]}
+                    PreTag="div"
+                    {...props}
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                </div>
+              ) : (
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              );
+            },
+          }}
+        >
+          {message.content}
+        </ReactMarkdown>
         
         {message.attachments && message.attachments.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             {message.attachments.map((attachment) => (
               <AttachmentPreview key={attachment.id} attachment={attachment} />
             ))}
+          </div>
+        )}
+
+        {message.streaming && (
+          <div className="flex items-center gap-1 mt-2 text-gray-500">
+            <Loader2 size={14} className="animate-spin" />
+            <span className="text-xs">Generating...</span>
           </div>
         )}
       </div>

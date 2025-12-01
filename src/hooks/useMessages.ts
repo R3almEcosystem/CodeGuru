@@ -1,7 +1,8 @@
 // src/hooks/useMessages.ts
 import { useState, useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
-import { Message, FileAttachment, Conversation, Project } from '../types';
+import { Message, FileAttachment, Conversation, Project, StreamingMessage } from '../types';
+import { useSettings } from './useSettings';
 
 type Setters = {
   setCurrentProjectId: (id: string | null) => void;
@@ -13,7 +14,8 @@ export function useMessages(
   urlConvId?: string | null,
   setters?: Setters
 ) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { apiKey, baseUrl, model } = useSettings();
+  const [messages, setMessages] = useState<StreamingMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConv, setCurrentConv] = useState<Conversation | null>(null);
@@ -55,6 +57,7 @@ export function useMessages(
     if (projectId) query = query.eq('project_id', projectId);
 
     const { data, error } = await query;
+
     if (error) {
       console.error('loadConversations error:', error);
       setConversations([]);
@@ -63,145 +66,210 @@ export function useMessages(
     }
   };
 
-  const switchProject = async (projectId: string) => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', projectId)
-      .single();
-
-    if (error || !data) return console.error('switchProject error:', error);
-
-    setCurrentProject(data);
-    safeSetProjectId(projectId);
-    setCurrentConv(null);
-    safeSetConvId(null);
-    await loadConversations(projectId);
-  };
-
-  const switchConversation = async (convId: string) => {
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('id', convId)
-      .single();
-
-    if (error || !data) {
-      console.error('switchConversation error:', error);
-      setIsLoading(false);
-      return;
-    }
-
-    setCurrentConv(data);
-    safeSetConvId(convId);
-    await loadMessages(convId);
-    setIsLoading(false);
-  };
-
   const loadMessages = async (convId: string) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', convId)
-      .order('created_at', { ascending: true }); // FIXED: Use created_at
+      .order('timestamp', { ascending: true });
 
     if (error) {
       console.error('loadMessages error:', error);
       setMessages([]);
-      return;
+    } else {
+      setMessages(data || []);
     }
-
-    const parsed: Message[] = (data || []).map((m: any) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      timestamp: new Date(m.created_at).getTime(),
-      attachments: m.attachments ? JSON.parse(m.attachments) : [],
-    }));
-
-    setMessages(parsed);
   };
 
-  const createProject = async (title = 'New Project') => {
+  const createProject = async (title: string = 'New Project') => {
     const userId = userIdRef.current;
     if (!userId) return;
-
-    const { data: existing } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('title', title)
-      .maybeSingle();
-
-    if (existing) {
-      await switchProject(existing.id);
-      return;
-    }
-
-    const { data: newProj, error } = await supabase
-      .from('projects')
-      .insert({ user_id: userId, title })
-      .select()
-      .single();
-
-    if (error || !newProj) return console.error('createProject error:', error);
-
-    setProjects(p => [newProj, ...p]);
-    await switchProject(newProj.id);
-  };
-
-  const createConversation = async (title = 'New Conversation') => {
-    const userId = userIdRef.current;
-    if (!userId) return;
-
-    const projectId = currentProject?.id || null;
-
-    const { data: newConv, error } = await supabase
-      .from('conversations')
-      .insert({ user_id: userId, title, project_id: projectId })
-      .select()
-      .single();
-
-    if (error || !newConv) return console.error('createConversation error:', error);
-
-    setConversations(c => [newConv, ...c]);
-    await switchConversation(newConv.id);
-  };
-
-  const addMessage = async (msg: Omit<Message, 'id'>) => {
-    if (!currentConv) throw new Error('No active conversation');
-
-    const dbMsg = {
-      conversation_id: currentConv.id,
-      role: msg.role,
-      content: msg.content,
-      // Let Supabase auto-set created_at
-      attachments: JSON.stringify(msg.attachments || []),
-    };
 
     const { data, error } = await supabase
-      .from('messages')
-      .insert(dbMsg)
+      .from('projects')
+      .insert({
+        title,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .select()
       .single();
 
-    if (error) throw error;
-
-    const fullMsg: Message = {
-      ...msg,
-      id: data.id,
-      timestamp: new Date(data.created_at).getTime(),
-    };
-    setMessages(m => [...m, fullMsg]);
-
-    await supabase
-      .from('conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', currentConv.id);
-
-    await loadConversations(currentProject?.id || null);
+    if (error) {
+      console.error('createProject error:', error);
+    } else if (data) {
+      setProjects(prev => [data, ...prev]);
+      await switchProject(data.id);
+      await createConversation(data.id);
+    }
   };
+
+  const createConversation = async (projectId?: string) => {
+    const userId = userIdRef.current;
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        title: 'New Conversation',
+        project_id: projectId || currentProject?.id,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('createConversation error:', error);
+    } else if (data) {
+      setConversations(prev => [data, ...prev]);
+      await switchConversation(data.id);
+    }
+  };
+
+  const switchProject = async (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setCurrentProject(project);
+      safeSetProjectId(projectId);
+      await loadConversations(projectId);
+      if (conversations.length > 0) {
+        await switchConversation(conversations[0].id);
+      } else {
+        await createConversation(projectId);
+      }
+    }
+  };
+
+  const switchConversation = async (convId: string) => {
+    const conv = conversations.find(c => c.id === convId);
+    if (conv) {
+      setCurrentConv(conv);
+      safeSetConvId(convId);
+      await loadMessages(convId);
+    }
+  };
+
+  const addMessage = async (message: Message, attachments?: FileAttachment[]) => {
+    if (!currentConv) return;
+
+    const msgWithAttachments = { ...message, attachments };
+    setMessages(prev => [...prev, { ...msgWithAttachments, streaming: message.role === 'assistant' } as StreamingMessage]);
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: currentConv.id,
+          role: message.role,
+          content: message.content,
+          timestamp: message.timestamp,
+          attachments: attachments || [],
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setMessages(prev => prev.map(m => m.timestamp === message.timestamp ? { ...m, id: data.id } : m));
+      }
+
+      // If user message, trigger Grok stream
+      if (message.role === 'user') {
+        await streamGrokResponse();
+      }
+    } catch (err) {
+      console.error('addMessage error:', err);
+    }
+  };
+
+  const streamGrokResponse = async () => {
+    if (!apiKey || !currentConv) return;
+
+    const assistantMsg: StreamingMessage = {
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      streaming: true,
+    };
+    setMessages(prev => [...prev, assistantMsg]);
+
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let content = '';
+
+      while (true) {
+        const { done, value } = await reader?.read() ?? { done: true };
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+        for (const line of lines) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices[0]?.delta?.content || '';
+            content += delta;
+            setMessages(prev =>
+              prev.map(m =>
+                m.timestamp === assistantMsg.timestamp ? { ...m, content } : m
+              )
+            );
+          } catch (err) {}
+        }
+      }
+
+      // Complete and save
+      setMessages(prev =>
+        prev.map(m =>
+          m.timestamp === assistantMsg.timestamp ? { ...m, streaming: false, isComplete: true } : m
+        )
+      );
+
+      await supabase.from('messages').insert({
+        conversation_id: currentConv.id,
+        role: 'assistant',
+        content,
+        timestamp: assistantMsg.timestamp,
+      });
+
+      // Auto-update title if first assistant message
+      if (messages.length === 1) {
+        const title = content.slice(0, 50).trim() + (content.length > 50 ? '...' : '');
+        await supabase.from('conversations').update({ title }).eq('id', currentConv.id);
+        setCurrentConv({ ...currentConv, title });
+        setConversations(prev => prev.map(c => c.id === currentConv.id ? { ...c, title } : c));
+      }
+    } catch (err) {
+      console.error('Stream error:', err);
+      setMessages(prev => prev.slice(0, -1)); // Remove failed msg
+    }
+  };
+
+  // Auto-scroll (add in App.tsx useEffect)
+  // ...
 
   // ONE-TIME INIT ONLY
   useEffect(() => {
