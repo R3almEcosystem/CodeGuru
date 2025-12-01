@@ -98,7 +98,7 @@ function App() {
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">Project:</span>
                   <button
-                    on  onClick={() => {/* TODO: open project selector */}}
+                    onClick={() => {/* TODO: open project selector modal */}}
                     className="font-medium text-blue-600 hover:underline"
                   >
                     {currentProject.title}
