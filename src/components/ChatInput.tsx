@@ -1,256 +1,196 @@
 // src/components/ChatInput.tsx
-import { Send, Cpu, Paperclip, X, Loader2, Folder, Upload } from 'lucide-react';
-import { useState, KeyboardEvent, DragEvent, useRef } from 'react';
-import { FileAttachment } from '../types';
-import { uploadFile as supabaseUploadFile } from '../lib/supabase';
+import React, { useState, useRef, useEffect } from 'react';
+import { Paperclip, Folder, Send, Cpu } from 'lucide-react';
+import { uploadFile } from '../lib/supabase';
+import type { FileAttachment } from '../types';
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: FileAttachment[]) => void;
-  disabled: boolean;
-  currentModel: string;
-  onOpenModelSelector: () => void;
+  onSend: (content: string, attachments?: FileAttachment[]) => Promise<void>;
+  disabled?: boolean;
 }
 
-export function ChatInput({
-  onSend,
-  disabled,
-  currentModel,
-  onOpenModelSelector,
-}: ChatInputProps) {
-  const [input, setInput] = useState('');
+export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+  const [message, setMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  const getModelDisplayName = (model: string) => {
-    if (model === 'auto') return 'Auto';
-    if (model.startsWith('grok-4')) return 'Grok 4';
-    if (model.startsWith('grok-3')) return 'Grok 3';
-    if (model.startsWith('grok-2')) return 'Grok 2';
-    if (model === 'grok-code-fast-1') return 'Code';
-    return model;
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [message]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || isSending || disabled) return;
+
+    setIsSending(true);
+    try {
+      await onSend(message.trim(), attachments.length > 0 ? attachments : undefined);
+      setMessage('');
+      setAttachments([]);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    } catch (err) {
+      console.error('Send failed:', err);
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  const processFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
-    setIsUploading(true);
-    const newAttachments: FileAttachment[] = [];
-
-    for (const file of files) {
-      // Skip hidden/system files
-      if (file.name.startsWith('.') || file.name.startsWith('~')) continue;
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`File "${file.name}" exceeds 10MB limit and was skipped.`);
-        continue;
-      }
-
+    const uploaded: FileAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       try {
-        const { data, error } = await supabaseUploadFile(file);
-        if (error) throw error;
-
-        const publicUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/chat-attachments/${data.path}`;
-
-        newAttachments.push({
-          id: crypto.randomUUID(),
-          name: file.webkitRelativePath || file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          content: '',
-          url: publicUrl,
-        });
+        const result = await uploadFile(file);
+        if (result.data) {
+          uploaded.push({
+            name: file.name,
+            url: result.data.publicUrl,
+            type: file.type || 'application/octet-stream',
+            size: file.size,
+          });
+        }
       } catch (err) {
-        console.error('Upload failed for:', file.name, err);
+        console.error('Upload failed:', err);
       }
     }
 
-    setAttachments(prev => [...prev, ...newAttachments]);
-    setIsUploading(false);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    processFiles(files);
-    e.target.value = '';
-  };
-
-  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    processFiles(files);
-    e.target.value = '';
-  };
-
-  const handleDrag = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
+    if (uploaded.length > 0) {
+      setAttachments(prev => [...prev, ...uploaded]);
     }
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const files = Array.from(e.dataTransfer?.files || []);
+    const files = e.dataTransfer.files;
     if (files.length > 0) {
-      processFiles(files);
+      handleFileSelect(files);
     }
   };
 
-  const removeAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const handleSubmit = () => {
-    if (!input.trim() && attachments.length === 0) return;
-
-    onSend(input.trim(), attachments.length > 0 ? attachments : undefined);
-    setInput('');
-    setAttachments([]);
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
+      onSubmit={handleSubmit}
       className="border-t border-gray-200 bg-white"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
     >
-      {/* Attachment Pills */}
+      {/* Attachments Preview */}
       {attachments.length > 0 && (
-        <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2">
-          {attachments.map((att) => (
+        <div className="mx-4 mb-3 flex flex-wrap gap-2">
+          {attachments.map((att, i) => (
             <div
-              key={att.id}
-              className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-200"
+              key={i}
+              className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm"
             >
-              {att.name.includes('/') ? <Folder size={14} /> : <Paperclip size={14} />}
-              <span className="truncate max-w-[180px]">{att.name.split('/').pop()}</span>
+              <Paperclip className="w-4 h-4" />
+              <span className="max-w-xs truncate">{att.name}</span>
               <button
                 type="button"
-                onClick={() => removeAttachment(att.id)}
-                className="ml-1 text-blue-600 hover:text-blue-800"
+                onClick={() => removeAttachment(i)}
+                className="ml-1 hover:text-blue-900"
               >
-                <X size={14} />
+                ×
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Input Area */}
-      <div
-        className={`mx-4 mb-4 p-4 border-2 border-dashed rounded-xl transition-all ${
-          dragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 bg-gray-50'
-        }`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
+      <div className="mx-4 mb-4 p-4 border-2 border-dashed rounded-xl transition-all border-gray-300 bg-gray-50 hover:border-gray-400">
         <div className="flex items-end gap-3">
-          {/* Model Selector */}
+          {/* Model Selector (Grok 4) */}
           <button
             type="button"
-            onClick={onOpenModelSelector}
-            disabled={disabled}
-            className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+            disabled
+            className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg flex items-center gap-2 text-sm font-medium shadow-sm"
           >
-            <Cpu size={16} />
-            {getModelDisplayName(currentModel)}
+            <Cpu className="w-4 h-4" />
+            Grok 4
           </button>
 
-          {/* Upload Buttons */}
+          {/* File & Folder Buttons */}
           <div className="flex gap-2">
             <label className="cursor-pointer">
-              <div className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors">
-                <Paperclip size={16} />
+              <div className="px-4 py-2.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm">
+                <Paperclip className="w-4 h-4" />
                 File
               </div>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
-                onChange={handleFileSelect}
-                disabled={disabled || isUploading}
+                onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
               />
             </label>
 
             <label className="cursor-pointer">
-              <div className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors">
-                <Folder size={16} />
+              <div className="px-4 py-2.5 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg flex items-center gap-2 text-sm font-medium transition-all shadow-sm">
+                <Folder className="w-4 h-4" />
                 Folder
               </div>
               <input
                 ref={folderInputRef}
                 type="file"
+                // @ts-ignore - webkitdirectory is widely supported
                 webkitdirectory=""
                 directory=""
                 multiple
-                onChange={handleFolderSelect}
-                disabled={disabled || isUploading}
+                onChange={(e) => handleFileSelect(e.target.files)}
                 className="hidden"
               />
             </label>
           </div>
 
-          {/* Text Input + Send */}
+          {/* Message Input + Send */}
           <div className="flex-1 flex items-end gap-3">
             <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
               placeholder="Ask Grok anything... (supports files & folders via drag/drop too)"
-              disabled={disabled || isUploading}
               rows={1}
+              disabled={disabled || isSending}
               className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none disabled:bg-gray-100 transition-all"
               style={{ minHeight: '56px', maxHeight: '200px' }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = '56px';
-                target.style.height = `${target.scrollHeight}px`;
-              }}
             />
 
             <button
               type="submit"
-              disabled={disabled || isUploading || (!input.trim() && attachments.length === 0)}
-              className="mb-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 font-medium transition-colors"
+              disabled={!message.trim() || isSending || disabled}
+              className="mb-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 font-medium transition-all shadow-md disabled:shadow-none"
             >
-              {isUploading ? (
-                <Loader2 size={20} className="animate-spin" />
+              {isSending ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Send size={20} />
+                <Send className="w-5 h-5" />
               )}
               <span className="hidden sm:inline">Send</span>
             </button>
           </div>
         </div>
-
-        {/* Drag & Drop Hint */}
-        {dragActive && (
-          <div className="mt-4 text-center text-blue-600 font-medium">
-            <Upload size={32} className="mx-auto mb-2" />
-            Drop files or folders here to attach
-          </div>
-        )}
       </div>
     </form>
   );
