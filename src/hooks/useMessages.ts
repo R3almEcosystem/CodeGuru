@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase, getUserId } from '../lib/supabase';
 import { Message, FileAttachment, Conversation, Project, StreamingMessage } from '../types';
 import { useSettings } from './useSettings';
-import { callXAI } from '../lib/xai'; // ← Using your perfect file
+import { callXAI } from '../lib/xai';
 
 type Setters = {
   setCurrentProjectId: (id: string | null) => void;
@@ -29,7 +29,7 @@ export function useMessages(
   const safeSetProjectId = (id: string | null) => setters?.setCurrentProjectId?.(id);
   const safeSetConvId = (id: string | null) => setters?.setCurrentConvId?.(id);
 
-  // === DATABASE HELPERS (unchanged) ===
+  // === DATABASE HELPERS ===
   const loadProjects = async () => {
     const userId = userIdRef.current;
     if (!userId) return [];
@@ -44,7 +44,10 @@ export function useMessages(
   const loadConversations = async (projectId?: string | null) => {
     const userId = userIdRef.current;
     if (!userId) return [];
-    let q = supabase.from('conversations').select('id, title, created_at, updated_at, project_id').eq('user_id', userId);
+    let q = supabase
+      .from('conversations')
+      .select('id, title, created_at, updated_at, project_id')
+      .eq('user_id', userId);
     if (projectId) q = q.eq('project_id', projectId);
     const { data } = await q.order('updated_at', { ascending: false });
     return data || [];
@@ -71,7 +74,11 @@ export function useMessages(
   const createProject = async (title = 'New Project') => {
     const userId = userIdRef.current;
     if (!userId) return null;
-    const { data } = await supabase.from('projects').insert({ title, user_id: userId }).select().single();
+    const { data } = await supabase
+      .from('projects')
+      .insert({ title, user_id: userId })
+      .select()
+      .single();
     if (data) setProjects(p => [data, ...p]);
     return data;
   };
@@ -139,7 +146,6 @@ export function useMessages(
       }
 
       if (message.role === 'user') {
-        // Cancel previous stream if running
         abortControllerRef.current?.abort();
         abortControllerRef.current = new AbortController();
         await streamGrokResponse(abortControllerRef.current.signal);
@@ -149,7 +155,7 @@ export function useMessages(
     }
   };
 
-  // === GROK STREAMING USING YOUR PERFECT xai.ts ===
+  // === GROK STREAMING — FIXED & FINAL ===
   const streamGrokResponse = async (signal: AbortSignal) => {
     if (!currentConv) return;
 
@@ -162,15 +168,12 @@ export function useMessages(
     setMessages(prev => [...prev, assistantMsg]);
 
     try {
+      // CORRECT: messages first, model string second
       const response = await callXAI(
-        {
-          model: model || 'grok-beta',
-          messages: messages
-            .filter(m => !m.streaming)
-            .map(m => ({ role: m.role, content: m.content })),
-          stream: true,
-        },
-        signal
+        messages
+          .filter(m => !m.streaming)
+          .map(m => ({ role: m.role, content: m.content })),
+        model || 'grok-beta'
       );
 
       if (!response.ok) {
@@ -204,10 +207,13 @@ export function useMessages(
                 )
               );
             }
-          } catch {}
+          } catch (e) {
+            console.warn('Failed to parse SSE chunk:', data);
+          }
         }
       }
 
+      // Mark complete
       setMessages(prev =>
         prev.map(m =>
           m.timestamp === assistantMsg.timestamp
@@ -216,16 +222,20 @@ export function useMessages(
         )
       );
 
+      // Save final assistant message
       await supabase.from('messages').insert({
         conversation_id: currentConv.id,
         role: 'assistant',
         content,
       });
 
-      // Auto-title first response
+      // Auto-title conversation on first response
       if (messages.length <= 2) {
-        const title = content.split('\n')[0].slice(0, 50).trim() || 'New Chat';
-        await supabase.from('conversations').update({ title }).eq('id', currentConv.id);
+        const title = content.split('\n')[0].slice(0, 60).trim() || 'New Chat';
+        await supabase
+          .from('conversations')
+          .update({ title })
+          .eq('id', currentConv.id);
         setCurrentConv(c => c ? { ...c, title } : null);
       }
     } catch (err: any) {
@@ -275,7 +285,7 @@ export function useMessages(
     if (currentProject?.id === id) setCurrentProject(p => p ? { ...p, title } : null);
   };
 
-  // === INIT ===
+  // === INITIALIZATION ===
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;

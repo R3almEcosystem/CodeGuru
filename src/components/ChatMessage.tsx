@@ -1,193 +1,189 @@
 // src/components/ChatMessage.tsx
-import { useState } from 'react';
-import { Bot, User, Paperclip, Download, FileText, AlertCircle, Copy, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { StreamingMessage, FileAttachment } from '../types';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Copy, Check, Download, FileText, Image, FileCode, File } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { StreamingMessage } from '@/types';
 
 interface ChatMessageProps {
   message: StreamingMessage;
 }
 
-function AttachmentPreview({ attachment }: { attachment: FileAttachment }) {
-  const [previewText, setPreviewText] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState(false);
+export default function ChatMessage({ message }: ChatMessageProps) {
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const isUser = message.role === 'user';
+  const hasContent = message.content.trim().length > 0;
+  const hasAttachments = message.attachments && message.attachments.length > 0;
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const copyToClipboard = async (text: string, codeId?: string) => {
+    await navigator.clipboard.writeText(text);
+    if (codeId) setCopiedCode(codeId);
+    setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const downloadFile = () => {
-    if (attachment.url) {
-      const a = document.createElement('a');
-      a.href = attachment.url;
-      a.download = attachment.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else if (attachment.content) {
-      try {
-        const byteCharacters = atob(attachment.content);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: attachment.type });
-        
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = attachment.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error('Error downloading file:', error);
-        alert('Failed to download file');
-      }
-    } else {
-      alert('No file data available for download.');
-    }
-  };
-
-  const loadPreviewText = async () => {
-    try {
-      if (attachment.content) {
-        const text = atob(attachment.content);
-        setPreviewText(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
-      } else if (attachment.url) {
-        const response = await fetch(attachment.url);
-        const text = await response.text();
-        setPreviewText(text.slice(0, 500) + (text.length > 500 ? '...' : ''));
-      }
-    } catch (err) {
-      setPreviewError(true);
-    }
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return <Image className="w-5 h-5" />;
+    if (type.includes('pdf')) return <FileText className="w-5 h-5" />;
+    if (type.includes('json') || type.includes('javascript') || type.includes('typescript') || type.includes('python'))
+      return <FileCode className="w-5 h-5" />;
+    return <File className="w-5 h-5" />;
   };
 
   return (
-    <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Paperclip size={16} className="text-gray-500" />
-          <span className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{attachment.name}</span>
-        </div>
-        <button
-          onClick={downloadFile}
-          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+    <div
+      className={cn(
+        "flex gap-4 px-6 py-5 transition-all",
+        isUser ? "bg-muted/30" : "bg-background",
+        message.streaming && "animate-pulse"
+      )}
+    >
+      {/* Avatar */}
+      <div className="flex-shrink-0">
+        <div
+          className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg",
+            isUser
+              ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
+              : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white"
+          )}
         >
-          <Download size={12} />
-          {formatFileSize(attachment.size)}
-        </button>
+          {isUser ? 'U' : 'G'}
+        </div>
       </div>
-      {attachment.type.startsWith('text/') && (
-        <div className="bg-white p-2 border border-gray-300 rounded text-xs font-mono overflow-auto max-h-32">
-          {previewText === null ? (
-            <div className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer" onClick={loadPreviewText}>
-              <span>Click to preview content</span>
-              <FileText size={12} />
-            </div>
-          ) : previewError ? (
-            <div className="text-xs text-red-400 flex items-center gap-1">
-              <AlertCircle size={12} />
-              Failed to load preview
-            </div>
-          ) : (
-            <pre className="whitespace-pre-wrap">
-              {previewText}
-            </pre>
+
+      {/* Message Content */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Role Header */}
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-foreground">
+            {isUser ? 'You' : 'Grok'}
+          </span>
+          {message.streaming && (
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              typing...
+            </span>
           )}
         </div>
-      )}
-    </div>
-  );
-}
 
-export function ChatMessage({ message }: ChatMessageProps) {
-  const isUser = message.role === 'user';
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  return (
-    <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-          <Bot size={18} className="text-white" />
-        </div>
-      )}
-
-      <div
-        className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 ${
-          isUser
-            ? 'bg-blue-600 text-white rounded-br-sm'
-            : 'bg-gray-100 text-gray-900 rounded-bl-sm'
-        }`}
-      >
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            code({ node, inline, className, children, ...props }: any) {
-              const match = /language-(\w+)/.exec(className || '');
-              return !inline && match ? (
-                <div className="relative my-2">
-                  <button
-                    onClick={() => copyToClipboard(String(children))}
-                    className="absolute top-2 right-2 p-1 bg-gray-200 hover:bg-gray-300 rounded text-gray-600"
-                    aria-label="Copy code"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <SyntaxHighlighter
-                    style={vscDarkPlus}
-                    language={match[1]}
-                    PreTag="div"
-                    {...props}
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
+        {/* File Attachments */}
+        {hasAttachments && (
+          <div className="flex flex-wrap gap-3">
+            {message.attachments!.map((file, i) => (
+              <a
+                key={i}
+                href={file.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 p-4 rounded-lg border bg-card hover:bg-accent transition-all"
+              >
+                <div className="p-2 rounded bg-muted/50 text-muted-foreground group-hover:text-foreground transition-colors">
+                  {getFileIcon(file.type)}
                 </div>
-              ) : (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
-        
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="space-y-2 mt-2">
-            {message.attachments.map((attachment) => (
-              <AttachmentPreview key={attachment.id} attachment={attachment} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate max-w-xs">{file.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+                <Download className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
             ))}
           </div>
         )}
 
-        {message.streaming && (
-          <div className="flex items-center gap-1 mt-2 text-gray-500">
-            <Loader2 size={14} className="animate-spin" />
-            <span className="text-xs">Generating...</span>
+        {/* Message Content with Markdown */}
+        {hasContent && (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              components={{
+                code({ node, inline, className, children, ...props }) {
+                  const match = /language-(\w+)/.exec(className || '');
+                  const codeString = String(children).replace(/\n$/, '');
+                  const codeId = `${message.timestamp}-${match?.[1] || 'text'}`;
+
+                  return !inline && match ? (
+                    <div className="relative group my-4">
+                      <button
+                        onClick={() => copyToClipboard(codeString, codeId)}
+                        className={cn(
+                          "absolute right-3 top-3 p-2 rounded-lg transition-all z-10",
+                          "bg-background/80 backdrop-blur-sm border",
+                          "hover:bg-accent hover:border-accent-foreground",
+                          copiedCode === codeId && "bg-emerald-500/20 border-emerald-500"
+                        )}
+                      >
+                        {copiedCode === codeId ? (
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                      <SyntaxHighlighter
+                        {...props}
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                        customStyle={{
+                          margin: 0,
+                          borderRadius: '0.5rem',
+                          fontSize: '0.875rem',
+                        }}
+                      >
+                        {codeString}
+                      </SyntaxHighlighter>
+                    </div>
+                  ) : (
+                    <code
+                      className={cn(
+                        "px-1.5 py-0.5 rounded-md text-sm font-mono",
+                        "bg-muted text-muted-foreground",
+                        className
+                      )}
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+                li: ({ children }) => <li className="ml-4">{children}</li>,
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                    {children}
+                  </a>
+                ),
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-4 border-muted-foreground/50 pl-4 italic my-4">
+                    {children}
+                  </blockquote>
+                ),
+                h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-3">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-xl font-bold mt-5 mb-3">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-lg font-bold mt-4 mb-2">{children}</h3>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         )}
-      </div>
 
-      {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center">
-          <User size={18} className="text-white" />
-        </div>
-      )}
+        {/* Streaming cursor */}
+        {message.streaming && (
+          <span className="inline-block w-2 h-5 bg-foreground align-middle animate-pulse ml-1" />
+        )}
+      </div>
     </div>
   );
 }
