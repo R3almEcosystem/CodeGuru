@@ -292,8 +292,20 @@ export function useMessages(
 
     const init = async () => {
       setIsLoading(true);
-      const uid = await getUserId();
-      if (!uid) return setIsLoading(false);
+      let uid: string | null = null;
+      try {
+        uid = await getUserId();
+      } catch (err) {
+        // No authenticated user — continue in unauthenticated mode.
+        console.warn('useMessages init: no authenticated user, continuing unauthenticated');
+        uid = null;
+      }
+
+      if (!uid) {
+        setIsLoading(false);
+        return;
+      }
+
       userIdRef.current = uid;
 
       const projs = await loadProjects();
